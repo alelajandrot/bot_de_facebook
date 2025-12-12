@@ -1,0 +1,82 @@
+[
+    {
+        "name": "datr",
+        "value": "5OJraK5aeA1jtjgJdrvbio3u",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1786460806,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "ps_l",
+        "value": "1",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1786460817,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "Lax"
+    },
+    {
+        "name": "ps_n",
+        "value": "1",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1786460817,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "sb",
+        "value": "5OJraGr_hbqgf4vRAywghQUB",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1797545481,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "c_user",
+        "value": "100052599316855",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1794521483,
+        "httpOnly": false,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "fr",
+        "value": "1ND1ivamnVxvDkicm.AWdu-5T8yIJt9XDqNE_EuMFdXpK5m8sQlnO43Npo3doSZKpledw.BpFQWv..AAA.0.0.BpFQWv.AWc04D__158XEkA-YVmI3-_rJiI",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1770761483,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "xs",
+        "value": "8%3AX0uT3-Km49-rGw%3A2%3A1762985388%3A-1%3A-1%3A%3AAczuUt-Pz6_wwIw88Lz46Z-ejI4tzO7KKtIkWYpIrA",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1794521483,
+        "httpOnly": true,
+        "secure": true,
+        "sameSite": "None"
+    },
+    {
+        "name": "wd",
+        "value": "1280x720",
+        "domain": ".facebook.com",
+        "path": "/",
+        "expires": 1763590288,
+        "httpOnly": false,
+        "secure": true,
+        "sameSite": "Lax"
+    }
+]

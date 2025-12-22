@@ -1,0 +1,22 @@
+{
+    "tatiana.json": {
+        "username": "3128172445",
+        "password": "Solocali123*"
+    },
+    "wendy.json": {
+        "username": "3128172445",
+        "password": "Solocali12345*"
+    },
+    "fb_kevin.json": {
+        "username": "3012089597",
+        "password": "contrasena3012089597\n",
+        "proxy": null,
+        "platform": "facebook"
+    },
+    "fb_sintia.json": {
+        "username": "3242568424",
+        "password": "sintiatulua*\n",
+        "proxy": null,
+        "platform": "facebook"
+    }
+}

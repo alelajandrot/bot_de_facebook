@@ -1,2 +1,3 @@
-2025/12/22-09:51:42.244 57a0 Creating DB C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\tatiana\Default\Sync Data\LevelDB since it was missing.
-2025/12/22-09:51:42.258 57a0 Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\tatiana\Default\Sync Data\LevelDB/MANIFEST-000001
+2025/12/30-15:00:20.838 5fcc Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\tatiana\Default\Sync Data\LevelDB/MANIFEST-000001
+2025/12/30-15:00:20.842 5fcc Recovering log #3
+2025/12/30-15:00:20.842 5fcc Reusing old log C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\tatiana\Default\Sync Data\LevelDB/000003.log 

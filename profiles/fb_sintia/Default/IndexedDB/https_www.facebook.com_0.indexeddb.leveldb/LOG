@@ -1,6 +1,3 @@
-2025/12/22-09:52:35.321 5c88 Creating DB C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\IndexedDB\https_www.facebook.com_0.indexeddb.leveldb since it was missing.
-2025/12/22-09:52:35.327 5c88 Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\IndexedDB\https_www.facebook.com_0.indexeddb.leveldb/MANIFEST-000001
-2025/12/22-09:52:36.168 583c Level-0 table #5: started
-2025/12/22-09:52:36.171 583c Level-0 table #5: 21783 bytes OK
-2025/12/22-09:52:36.173 583c Delete type=0 #3
-2025/12/22-09:52:36.174 583c Manual compaction at level-0 from '\x00\x09\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x0a\x00\x00\x00' @ 0 : 0; will stop at (end)
+2025/12/30-15:05:29.114 a4f0 Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\IndexedDB\https_www.facebook.com_0.indexeddb.leveldb/MANIFEST-000001
+2025/12/30-15:05:29.115 a4f0 Recovering log #4
+2025/12/30-15:05:29.122 a4f0 Reusing old log C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\IndexedDB\https_www.facebook.com_0.indexeddb.leveldb/000004.log 

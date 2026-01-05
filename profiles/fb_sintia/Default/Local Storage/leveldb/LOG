@@ -1,2 +1,3 @@
-2025/12/22-09:52:33.998 395c Creating DB C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\Local Storage\leveldb since it was missing.
-2025/12/22-09:52:34.024 395c Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\Local Storage\leveldb/MANIFEST-000001
+2025/12/30-15:05:28.195 11094 Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\Local Storage\leveldb/MANIFEST-000001
+2025/12/30-15:05:28.200 11094 Recovering log #4
+2025/12/30-15:05:28.202 11094 Reusing old log C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\fb_sintia\Default\Local Storage\leveldb/000004.log 

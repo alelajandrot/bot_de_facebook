@@ -1,6 +1,0 @@
-codigos para utilizar el programa:
-1. cd facebook_bot
-2. copiar y pegar: 
-.\env\Scripts\activate
-3. luego compilar con:
- python ventana_principal.py

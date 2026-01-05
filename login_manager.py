@@ -451,7 +451,70 @@ def importar_perfil_especifico(alias):
         return False
     finally:
         conn.close()
+# login_manager.py (Fragmento a añadir/reemplazar)
 
+# ==============================================================================
+#           NUEVAS FUNCIONES PARA FILTRADO Y CAMUFLAJE AVANZADO
+# ==============================================================================
 
+def obtener_cuentas_por_plataforma(platform):
+    """Filtra cuentas desde SQLite específicamente por plataforma"""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Busca coincidencias exactas en la columna platform
+    c.execute("SELECT alias FROM cuentas WHERE platform = ? ORDER BY alias ASC", (platform.lower(),))
+    rows = c.fetchall()
+    conn.close()
+    
+    # Si no encuentra por columna, intenta buscar por prefijo (fallback)
+    if not rows:
+        prefix_map = {"facebook": "fb_", "instagram": "ig_", "tiktok": "tik_", "youtube": "yt_", "twitter": "tw_"}
+        prefix = prefix_map.get(platform.lower(), "")
+        if prefix:
+            conn = sqlite3.connect(DB_NAME)
+            c = conn.cursor()
+            c.execute("SELECT alias FROM cuentas WHERE alias LIKE ? ORDER BY alias ASC", (f"{prefix}%",))
+            rows = c.fetchall()
+            conn.close()
+
+    return [r[0] for r in rows] if rows else ["Sin cuentas"]
+
+def aplicar_stealth_avanzado(page):
+    """
+    Inyecta JavaScript para falsificar huellas digitales de hardware (Canvas, WebGL, Audio).
+    Esto hace que cada navegador parezca un dispositivo único.
+    """
+    stealth_script = """
+    (() => {
+        // 1. Ocultar WebDriver
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        
+        // 2. Falsificar Hardware (RAM y Nucleos aleatorios entre valores comunes)
+        const memory = [4, 8, 16, 32][Math.floor(Math.random() * 4)];
+        const cores = [4, 8, 12, 16][Math.floor(Math.random() * 4)];
+        Object.defineProperty(navigator, 'deviceMemory', { get: () => memory });
+        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => cores });
+
+        // 3. Ruido en Canvas (Evita Canvas Fingerprinting exacto)
+        const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+        CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
+            const image = originalGetImageData.apply(this, arguments);
+            // Modificamos sutilmente un píxel aleatorio para cambiar el hash
+            const i = Math.floor(Math.random() * (image.data.length / 4)) * 4;
+            image.data[i] = image.data[i] + (Math.random() > 0.5 ? 1 : -1);
+            return image;
+        };
+        
+        // 4. Ruido en WebGL
+        const getParameter = WebGLRenderingContext.prototype.getParameter;
+        WebGLRenderingContext.prototype.getParameter = function(parameter) {
+            if (parameter === 37445) return 'Intel Open Source Technology Center'; // UNMASKED_VENDOR_WEBGL
+            if (parameter === 37446) return 'Mesa DRI Intel(R) UHD Graphics 620 (Kabylake GT2)'; // UNMASKED_RENDERER_WEBGL
+            return getParameter.apply(this, [parameter]);
+        };
+    })();
+    """
+    page.add_init_script(stealth_script)
+    
 # EJECUTAR AL INICIO
 init_db()

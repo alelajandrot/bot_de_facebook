@@ -102,7 +102,8 @@ def rescatar_cookies_antiguas():
                 cookies_str = json.dumps(contenido)
                 c.execute("UPDATE cuentas SET cookies = ? WHERE alias = ?", (cookies_str, alias))
                 if c.rowcount == 0:
-                    c.execute("INSERT OR REPLACE INTO cuentas (alias, cookies, platform) VALUES (?, ?, ?)", 
+                    # Insertar solo si no existe la cuenta para evitar sobreescrituras
+                    c.execute("INSERT OR IGNORE INTO cuentas (alias, cookies, platform) VALUES (?, ?, ?)", 
                               (alias, cookies_str, "facebook"))
         except: pass
     conn.commit()
@@ -138,15 +139,88 @@ def guardar_cookies_db(alias, cookies_list, strict=True, platform_hint=None):
 
 
 def guardar_nueva_cuenta(alias, user, pwd, proxy, platform):
+    if not alias or not alias.strip():
+        return False
+
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     try:
-        c.execute("INSERT OR REPLACE INTO cuentas (alias, username, password, proxy, platform) VALUES (?, ?, ?, ?, ?)",
+        # Verificar existencia previa para evitar alias duplicado
+        c.execute("SELECT alias FROM cuentas WHERE alias = ?", (alias,))
+        if c.fetchone():
+            return False
+
+        c.execute("INSERT INTO cuentas (alias, username, password, proxy, platform) VALUES (?, ?, ?, ?, ?)",
                   (alias, user, pwd, proxy, platform))
         conn.commit()
         return True
-    except: return False
-    finally: conn.close()
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def actualizar_cuenta(alias, user=None, pwd=None, proxy=None, platform=None):
+    """Actualiza campos de una cuenta existente. Devuelve True si se actualizó."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        # Construir sentencia dinámica mínima
+        updates = []
+        params = []
+        if user is not None:
+            updates.append("username = ?")
+            params.append(user)
+        if pwd is not None:
+            updates.append("password = ?")
+            params.append(pwd)
+        if proxy is not None:
+            updates.append("proxy = ?")
+            params.append(proxy)
+        if platform is not None:
+            updates.append("platform = ?")
+            params.append(platform)
+
+        if not updates:
+            return False
+
+        params.append(alias)
+        sql = f"UPDATE cuentas SET {', '.join(updates)} WHERE alias = ?"
+        c.execute(sql, tuple(params))
+        conn.commit()
+        return c.rowcount > 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def eliminar_cuenta(alias):
+    """Elimina una cuenta de la DB y limpia archivos asociados (cookies/json, profile)."""
+    try:
+        conn = sqlite3.connect(DB_NAME)
+        c = conn.cursor()
+        c.execute("DELETE FROM cuentas WHERE alias = ?", (alias,))
+        conn.commit()
+        conn.close()
+
+        # Eliminar archivo JSON si existe
+        json_file = f"{alias}.json"
+        try:
+            if os.path.exists(json_file):
+                os.remove(json_file)
+        except: pass
+
+        # Eliminar carpeta de profile si existe
+        profile_dir = os.path.join("profiles", alias)
+        try:
+            if os.path.exists(profile_dir) and os.path.isdir(profile_dir):
+                shutil.rmtree(profile_dir)
+        except: pass
+
+        return True
+    except Exception:
+        return False
 
 def obtener_lista_alias():
     conn = sqlite3.connect(DB_NAME)
@@ -233,22 +307,27 @@ def manejar_login(context, alias, headless_mode=False):
     
     if platform == "facebook":
         return intentar_login_facebook(page, context, alias, data, headless_mode)
-    else:
-        # Para otras redes, si no es headless, permitir login manual breve
-        if not headless_mode:
-            from tkinter import messagebox
-            messagebox.showinfo("Login Requerido", f"La sesión de {platform} para {alias} expiró.\nInicia sesión manualmente en la ventana abierta.")
-            try:
-                # Esperar hasta 60 segundos a que el usuario se loguee
-                page.wait_for_timeout(60000) 
-                if verificar_si_logueado(page, platform):
-                    # Guardar la nueva sesión exitosa
-                    cookies = context.cookies()
-                    guardar_cookies_db(alias, cookies)
-                    with open(archivo_json, "w", encoding="utf-8") as f:
-                        json.dump(cookies, f, indent=4)
-                    return page
-            except: pass
+    # Intentos automáticos para plataformas conocidas con credenciales guardadas
+    if platform == "instagram":
+        inst = intentar_login_instagram(page, context, alias, data, headless_mode)
+        if inst:
+            return inst
+
+    # Si no se pudo con login automático, y no estamos en headless, permitir login manual breve
+    if not headless_mode:
+        from tkinter import messagebox
+        messagebox.showinfo("Login Requerido", f"La sesión de {platform} para {alias} expiró.\nInicia sesión manualmente en la ventana abierta.")
+        try:
+            # Esperar hasta 60 segundos a que el usuario se loguee
+            page.wait_for_timeout(60000)
+            if verificar_si_logueado(page, platform):
+                # Guardar la nueva sesión exitosa
+                cookies = context.cookies()
+                guardar_cookies_db(alias, cookies)
+                with open(archivo_json, "w", encoding="utf-8") as f:
+                    json.dump(cookies, f, indent=4)
+                return page
+        except: pass
         
     return None
 
@@ -277,6 +356,62 @@ def intentar_login_facebook(page, context, alias, data, headless_mode):
                 guardar_cookies_db(alias, context.cookies())
                 return page
     except: pass
+    return None
+
+def intentar_login_instagram(page, context, alias, data, headless_mode=False):
+    """Intenta login automático en Instagram usando username/password guardados."""
+    user = data.get('username')
+    pwd = data.get('password')
+    if not user or not pwd:
+        return None
+
+    try:
+        # Ir a la página de login de Instagram (asegurar ruta correcta)
+        page.goto('https://www.instagram.com/accounts/login/', wait_until='domcontentloaded', timeout=90000)
+        page.wait_for_timeout(2000)
+
+        # Selectores habituales
+        u_sel = 'input[name="username"]'
+        p_sel = 'input[name="password"]'
+        btn_sel = 'button[type="submit"]'
+
+        # Rellenar credenciales
+        try:
+            if page.locator(u_sel).is_visible(timeout=5000):
+                page.locator(u_sel).fill(user)
+            if page.locator(p_sel).is_visible(timeout=5000):
+                page.locator(p_sel).fill(pwd)
+        except Exception:
+            # Algunos flows están dentro de iframes o con placeholders distintos; intentar buscar por aria-label
+            try:
+                page.locator('input[aria-label*="Phone"], input[aria-label*="Email"], input[aria-label*="Username"]').first.fill(user)
+                page.locator('input[aria-label*="Password"]').first.fill(pwd)
+            except Exception:
+                pass
+
+        # Enviar
+        try:
+            if page.locator(btn_sel).is_visible(timeout=3000):
+                page.locator(btn_sel).click()
+        except Exception:
+            try:
+                page.keyboard.press('Enter')
+            except: pass
+
+        # Esperar respuesta y verificar
+        page.wait_for_timeout(5000)
+        if verificar_si_logueado(page, 'instagram'):
+            # Guardar cookies en DB y archivo JSON
+            cookies = context.cookies()
+            guardar_cookies_db(alias, cookies, strict=True, platform_hint='instagram')
+            try:
+                with open(f"{alias}.json", 'w', encoding='utf-8') as f:
+                    json.dump(cookies, f, indent=2)
+            except Exception:
+                pass
+            return page
+    except Exception as e:
+        print(f"⚠️ Intento login Instagram falló: {e}")
     return None
 
 def verificar_si_logueado(page, platform):
@@ -322,6 +457,8 @@ def verificar_si_logueado(page, platform):
 
 def login_manual_asistido(context, alias, data):
     platform = data.get("platform", "").lower()
+    username = data.get("username", "")
+    password = data.get("password", "")
 
     PLATFORM_URLS = {
         "facebook": "https://www.facebook.com/",
@@ -344,13 +481,26 @@ def login_manual_asistido(context, alias, data):
     page = context.new_page()
     page.goto(url, wait_until="domcontentloaded", timeout=120000)
 
-    respuesta = messagebox.askyesno(
-        "Login Manual",
-        f"Cuenta: {alias}\n"
-        f"Plataforma: {platform.upper()}\n\n"
+    # Construir mensaje con credenciales
+    mensaje = f"Cuenta: {alias}\nPlataforma: {platform.upper()}\n\n"
+    
+    if username or password:
+        mensaje += "📋 CREDENCIALES DE REFERENCIA:\n"
+        if username:
+            mensaje += f"👤 Usuario: {username}\n"
+        if password:
+            mensaje += f"🔑 Contraseña: {password}\n"
+        mensaje += "\n"
+    
+    mensaje += (
         f"1️⃣ Inicia sesión COMPLETA en {platform}\n"
         f"2️⃣ Asegúrate de ver el HOME / FEED\n"
         f"3️⃣ ¿Ya terminaste?"
+    )
+
+    respuesta = messagebox.askyesno(
+        "Login Manual",
+        mensaje
     )
 
     if not respuesta:
@@ -437,13 +587,13 @@ def importar_perfil_especifico(alias):
         platform = "facebook" # Default seguro
 
     try:
-        # 2. Usamos INSERT OR REPLACE pero manteniendo los campos de cookies limpios 
-        # para que no use cookies viejas de la carpeta si es Facebook
-        c.execute("""
-            INSERT OR REPLACE INTO cuentas (alias, platform, username, password, cookies) 
-            VALUES (?, ?, ?, ?, NULL)
-        """, (alias, platform, "Importado", "Importado"))
-        
+        # 2. No permitimos reemplacar una cuenta existente con el mismo alias
+        c.execute("SELECT alias FROM cuentas WHERE alias = ?", (alias,))
+        if c.fetchone():
+            return False
+
+        c.execute("INSERT INTO cuentas (alias, platform, username, password, cookies) VALUES (?, ?, ?, ?, NULL)",
+                  (alias, platform, "Importado", "Importado"))
         conn.commit()
         return True
     except Exception as e:
@@ -486,32 +636,82 @@ def aplicar_stealth_avanzado(page):
     """
     stealth_script = """
     (() => {
-        // 1. Ocultar WebDriver
-        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-        
-        // 2. Falsificar Hardware (RAM y Nucleos aleatorios entre valores comunes)
-        const memory = [4, 8, 16, 32][Math.floor(Math.random() * 4)];
-        const cores = [4, 8, 12, 16][Math.floor(Math.random() * 4)];
-        Object.defineProperty(navigator, 'deviceMemory', { get: () => memory });
-        Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => cores });
+        try {
+            // 0. Evitar detección básica
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
 
-        // 3. Ruido en Canvas (Evita Canvas Fingerprinting exacto)
-        const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-        CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
-            const image = originalGetImageData.apply(this, arguments);
-            // Modificamos sutilmente un píxel aleatorio para cambiar el hash
-            const i = Math.floor(Math.random() * (image.data.length / 4)) * 4;
-            image.data[i] = image.data[i] + (Math.random() > 0.5 ? 1 : -1);
-            return image;
-        };
-        
-        // 4. Ruido en WebGL
-        const getParameter = WebGLRenderingContext.prototype.getParameter;
-        WebGLRenderingContext.prototype.getParameter = function(parameter) {
-            if (parameter === 37445) return 'Intel Open Source Technology Center'; // UNMASKED_VENDOR_WEBGL
-            if (parameter === 37446) return 'Mesa DRI Intel(R) UHD Graphics 620 (Kabylake GT2)'; // UNMASKED_RENDERER_WEBGL
-            return getParameter.apply(this, [parameter]);
-        };
+            // 1. Lenguajes y Accept-Language
+            try { Object.defineProperty(navigator, 'languages', { get: () => ['es-ES','es'] }); } catch(e){}
+
+            // 2. Falsificar Hardware (RAM y Nucleos aleatorios entre valores comunes)
+            const memoryOptions = [4, 8, 16, 32];
+            const coresOptions = [2,4,6,8,12];
+            const memory = memoryOptions[Math.floor(Math.random() * memoryOptions.length)];
+            const cores = coresOptions[Math.floor(Math.random() * coresOptions.length)];
+            try { Object.defineProperty(navigator, 'deviceMemory', { get: () => memory }); } catch(e){}
+            try { Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => cores }); } catch(e){}
+
+            // 3. Plugins / mimeTypes spoof
+            try {
+                const fakePlugins = [{name:'Chrome PDF Plugin', filename: 'internal-pdf-viewer'}];
+                const fakeMimeTypes = [{type:'application/pdf', suffixes:'pdf'}];
+                Object.defineProperty(navigator, 'plugins', { get: () => fakePlugins });
+                Object.defineProperty(navigator, 'mimeTypes', { get: () => fakeMimeTypes });
+            } catch(e){}
+
+            // 4. Canvas noise
+            try {
+                const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+                CanvasRenderingContext2D.prototype.getImageData = function(x,y,w,h) {
+                    const img = origGetImageData.apply(this, arguments);
+                    // tiny deterministic noise based on time
+                    const idx = Math.floor(Math.random() * (img.data.length/4)) * 4;
+                    img.data[idx] = (img.data[idx] + (Math.random() > 0.5 ? 1 : -1)) & 255;
+                    return img;
+                };
+            } catch(e){}
+
+            // 5. WebGL noise and spoof vendor/renderer
+            try {
+                const getParameter = WebGLRenderingContext.prototype.getParameter;
+                WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445) return 'Intel Inc.'; // UNMASKED_VENDOR_WEBGL
+                    if (parameter === 37446) return 'ANGLE (Intel, Intel(R) UHD Graphics, 0.0.0)'; // UNMASKED_RENDERER_WEBGL
+                    return getParameter.apply(this, [parameter]);
+                };
+            } catch(e){}
+
+            // 6. Audio fingerprint mitigation
+            try {
+                const origCreateAnalyser = AudioContext.prototype.createAnalyser;
+                AudioContext.prototype.createAnalyser = function() {
+                    const analyser = origCreateAnalyser.apply(this, arguments);
+                    const origGetFloatFrequencyData = analyser.getFloatFrequencyData.bind(analyser);
+                    analyser.getFloatFrequencyData = function(array) {
+                        origGetFloatFrequencyData(array);
+                        for (let i=0;i<array.length;i++) array[i] = array[i] + (Math.random()*0.0000001);
+                    };
+                    return analyser;
+                };
+            } catch(e){}
+
+            // 7. Timezone offset spoof (minor)
+            try { Date.prototype.getTimezoneOffset = function(){ return -300; }; } catch(e){}
+
+            // 8. Prevent enumerateDevices and permissions leakage
+            try {
+                if (navigator.mediaDevices) {
+                    navigator.mediaDevices.enumerateDevices = function(){ return Promise.resolve([]); };
+                    navigator.mediaDevices.getUserMedia = function(){ return Promise.reject(new Error('getUserMedia blocked')); };
+                }
+            } catch(e){}
+
+            // 9. window.chrome and webdriver flags
+            try { window.chrome = window.chrome || { runtime: {} }; } catch(e){}
+
+        } catch(e) {
+            // no-op
+        }
     })();
     """
     page.add_init_script(stealth_script)

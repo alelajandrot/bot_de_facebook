@@ -1,0 +1,15 @@
+# Dependencias del Social Bot Farm
+# Instalar con: pip install -r requirements.txt
+
+# Interfaz Gráfica
+customtkinter>=5.2.0
+
+# Procesamiento de Imágenes
+Pillow>=10.0.0
+
+# Automatización de Navegador
+playwright>=1.40.0
+
+# Nota: Después de instalar playwright, ejecuta:
+# playwright install
+# playwright install chromium

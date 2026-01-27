@@ -1,0 +1,21 @@
+# Entornos virtuales
+env/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Perfiles de navegador
+profiles/
+dist/
+dist/profiles copy/
+
+# Cache y datos temporales
+*.log
+*.tmp
+*.cache
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db

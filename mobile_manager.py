@@ -112,42 +112,24 @@ def get_connected_devices() -> List[str]:
         print(f"Error obteniendo dispositivos ADB: {e}")
         return []
 
-def toggle_airplane_mode(device_id: str, enable: bool = True) -> bool:
+def toggle_mobile_data(device_id: str, enable: bool = True) -> bool:
     """
-    Activa o desactiva el Modo Avión en un dispositivo Android
-    enable=True: Activa Modo Avión (ON)
-    enable=False: Desactiva Modo Avión (OFF)
+    Activa o desactiva los Datos Móviles directamente.
+    Esto elude el bloqueo de seguridad del Modo Avión en Android modernos.
     """
+    state = "enable" if enable else "disable"
     try:
-        # Comando para activar/desactivar modo avión
-        # Usamos settings put global airplane_mode_on
-        state = "1" if enable else "0"
-        
-        # Activar/Desactivar modo avión
-        cmd1 = subprocess.run(
-            ["adb", "-s", device_id, "shell", "settings", "put", "global", 
-             "airplane_mode_on", state],
+        cmd = subprocess.run(
+            ["adb", "-s", device_id, "shell", "svc", "data", state],
             capture_output=True,
             text=True,
             timeout=10
         )
-        
-        if cmd1.returncode != 0:
-            return False
-        
-        # Enviar broadcast para aplicar cambios
-        cmd2 = subprocess.run(
-            ["adb", "-s", device_id, "shell", "am", "broadcast", "-a", 
-             "android.intent.action.AIRPLANE_MODE", "--ez", "state", state],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        return cmd2.returncode == 0
-    except (subprocess.TimeoutExpired, Exception) as e:
-        print(f"Error cambiando modo avión en {device_id}: {e}")
+        return cmd.returncode == 0
+    except Exception as e:
+        print(f"Error cambiando datos móviles en {device_id}: {e}")
         return False
+
 
 def wait_for_internet(device_id: str, timeout: int = 30) -> bool:
     """
@@ -174,27 +156,108 @@ def wait_for_internet(device_id: str, timeout: int = 30) -> bool:
     
     return False
 
+def toggle_airplane_mode(device_id: str, enable: bool = True) -> bool:
+    """Activa o desactiva el Modo Avión vía ADB."""
+    state = "1" if enable else "0"
+    try:
+        # Cambiar el ajuste global
+        subprocess.run(["adb", "-s", device_id, "shell", "settings", "put", "global", "airplane_mode_on", state], timeout=5)
+        # Informar al sistema del cambio para que desconecte las antenas
+        subprocess.run(["adb", "-s", device_id, "shell", "am", "broadcast", "-a", "android.intent.action.AIRPLANE_MODE", "--ez", "state", "true" if enable else "false"], timeout=5)
+        return True
+    except Exception as e:
+        print(f"❌ Error al cambiar Modo Avión en {device_id}: {e}")
+        return False
+        
 def renew_device_ip(device_id: str, wait_time: int = 5) -> bool:
     """
-    Renueva la IP pública del dispositivo activando y desactivando Modo Avión
-    wait_time: Segundos de espera entre activar y desactivar
+    Rotación de IP profesional: 
+    Modo Avión ON -> Espera -> Modo Avión OFF -> Espera Estabilización.
     """
-    # Activar modo avión
-    if not toggle_airplane_mode(device_id, enable=True):
+    try:
+        print(f"✈️ [IP] Activando Modo Avión en {device_id}...")
+        toggle_airplane_mode(device_id, enable=True)
+        time.sleep(wait_time) # Tiempo para que la operadora libere la IP
+        
+        print(f"📡 [IP] Desactivando Modo Avión (Reconectando red móvil)...")
+        toggle_airplane_mode(device_id, enable=False)
+        
+        # Espera crucial para que el modem 4G/5G negocie la nueva IP
+        print("⏳ Esperando estabilización de señal (15s)...")
+        time.sleep(15) 
+        
+        # Verificar si ya hay internet
+        return wait_for_internet(device_id, timeout=20)
+    except Exception as e:
+        print(f"⚠️ Fallo en rotación de IP: {e}")
         return False
-    
-    time.sleep(wait_time)
-    
-    # Desactivar modo avión
-    if not toggle_airplane_mode(device_id, enable=False):
-        return False
-    
-    # Esperar a que tenga internet
-    return wait_for_internet(device_id, timeout=30)
+
+
+
 
 # ==============================================================================
 # GESTIÓN DE CONFIGURACIÓN
 # ==============================================================================
+def get_device_public_ip(device_id: str) -> Optional[str]:
+    """
+    Hace que el celular consulte su IP pública actual usando su conexión de datos.
+    Requiere que el celular tenga 'curl' instalado (la mayoría de Android modernos lo tienen).
+    """
+    try:
+        # Usamos api.ipify.org para obtener la IP cruda
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "curl", "-s", "--max-time", "10", "https://api.ipify.org"],
+            capture_output=True,
+            text=True,
+            timeout=15
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # Validamos que parezca una IP
+            ip = result.stdout.strip()
+            if "." in ip: 
+                return ip
+    except (subprocess.TimeoutExpired, Exception) as e:
+        print(f"Error obteniendo IP pública de {device_id}: {e}")
+    return None
+
+def debug_tap(device_id: str, x: int, y: int) -> bool:
+    """Toca un punto específico en la pantalla del celular."""
+    try:
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "input", "tap", str(x), str(y)],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception as e:
+        print(f"Error en tap debug para {device_id}: {e}")
+        return False
+
+def debug_swipe(device_id: str, x1: int, y1: int, x2: int, y2: int, duration_ms: int = 500) -> bool:
+    """Desliza el dedo en la pantalla desde (x1, y1) hasta (x2, y2)."""
+    try:
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "input", "swipe", 
+             str(x1), str(y1), str(x2), str(y2), str(duration_ms)],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception as e:
+        print(f"Error en swipe debug para {device_id}: {e}")
+        return False
+
+def debug_type_text(device_id: str, text: str) -> bool:
+    """Ingresa texto en el campo que esté actualmente enfocado."""
+    try:
+        # Reemplazar espacios para que ADB los procese correctamente
+        safe_text = text.replace(" ", "%s")
+        result = subprocess.run(
+            ["adb", "-s", device_id, "shell", "input", "text", safe_text],
+            capture_output=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception as e:
+        print(f"Error escribiendo texto en {device_id}: {e}")
+        return False
 
 def load_device_config() -> Dict[str, str]:
     """Carga la configuración de dispositivos desde archivo JSON"""

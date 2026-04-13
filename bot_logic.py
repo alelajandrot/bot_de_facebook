@@ -10,355 +10,195 @@ from ai_provider import generate_comment_from_text, caption_from_image_url
 class SocialActions:
     """
     Contiene la lógica de automatización para cada acción social.
-    Métodos estáticos para facilitar la ejecución en hilos paralelos.
     """
 
     # =========================================================================
-    #                               FACEBOOK (CORREGIDO)
+    #                               FACEBOOK
     # =========================================================================
     @staticmethod
     def fb_reaction(alias, url, reaction, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
-        if not url: return
+        if not url: 
+            logger("⚠️ Error: URL vacía. No se puede iniciar.", "ERROR")
+            return
+            
         with sync_playwright() as p:
-            context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-            page = manejar_login(context, alias, headless)
-            if page:
-                try:
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                if page:
                     logger(f"Navegando al post: {url[:30]}...", "INFO")
-                    page.goto(url)
+                    page.goto(url, timeout=60000)
                     simulate_human_behavior(page)
                     
-                    # 1. Buscar el botón "Me gusta" (o el que ya esté activo) para hacer Hover
+                    # Buscar botón Me gusta
                     like_btn = page.locator('div[role="button"], span[role="button"]').filter(has_text=re.compile(r"^Me gusta$|^Like$", re.IGNORECASE)).first
-                    
-                    # Si no encuentra el texto, busca por aria-label (más robusto)
                     if not like_btn.is_visible(): 
                         like_btn = page.locator('[aria-label="Me gusta"], [aria-label="Like"]').first
                     
                     if like_btn.is_visible():
                         if reaction == "Me gusta":
-                            # Clic directo con fuerza para evitar bloqueos de UI
                             like_btn.click(force=True)
                             logger(f"FB: Like simple enviado ({alias})", "SUCCESS")
                         else:
-                            # 2. Desplegar el menú de reacciones
+                            # Reacciones complejas
                             logger(f"FB: Desplegando reacciones...", "INFO")
                             like_btn.hover(force=True)
-                            human_sleep(1.5, 3) # Tiempo vital para que aparezca el dock
+                            human_sleep(1.5, 3)
                             
-                            # Mapeo de reacciones (Español/Inglés)
-                            map_react = {
-                                "Me encanta": "Love", 
-                                "Me divierte": "Haha", 
-                                "Me asombra": "Wow", 
-                                "Me entristece": "Sad", 
-                                "Me enoja": "Angry"
-                            }
+                            map_react = {"Me encanta": "Love", "Me divierte": "Haha", "Me asombra": "Wow", "Me entristece": "Sad", "Me enoja": "Angry"}
                             eng = map_react.get(reaction, reaction)
                             
-                            # 3. SELECTOR MEJORADO (SOLUCIÓN AL ERROR)
-                            # Usamos coincidencia EXACTA en aria-label para evitar el error "Me encanta: 4 personas"
-                            # Y buscamos dentro del dock de reacciones (role="toolbar" o similar implícito)
                             btn_react = page.locator(f'[aria-label="{reaction}"], [aria-label="{eng}"]').first
-                            
                             if btn_react.is_visible():
-                                # --- LA CLAVE DEL ARREGLO ---
-                                # force=True atraviesa el <canvas> que interceptaba el clic
                                 btn_react.click(force=True)
                                 logger(f"FB: Reacción '{reaction}' enviada ({alias})", "SUCCESS")
                             else:
-                                # Intento de respaldo: Clic por JS si Playwright falla visualmente
-                                logger(f"Reacción visual falló, intentando inyección JS...", "WARN")
-                                found = page.evaluate(f"""(reactName) => {{
-                                    const labels = Array.from(document.querySelectorAll('[aria-label]'));
-                                    const btn = labels.find(el => el.ariaLabel === reactName);
-                                    if(btn) {{ btn.click(); return true; }}
-                                    return false;
-                                }}""", reaction)
-                                
-                                if found:
-                                    logger(f"FB: Reacción '{reaction}' enviada por JS ({alias})", "SUCCESS")
-                                else:
-                                    logger(f"Reacción {reaction} no encontrada, dando Like normal.", "WARN")
-                                    like_btn.click(force=True)
+                                logger(f"Reacción {reaction} no encontrada, dando Like normal.", "WARN")
+                                like_btn.click(force=True)
                         
                         save_screenshot_log(page, alias, "fb_react")
                         update_preview_cb()
                     else:
-                        logger(f"FB: Botón base 'Me gusta' no encontrado. ¿Post privado/borrado?", "ERROR")
+                        logger(f"FB: Botón 'Me gusta' no encontrado. ¿Post privado?", "ERROR")
                         save_screenshot_log(page, alias, "error_fb_btn")
-                        
-                except Exception as e:
-                    logger(f"Error FB React ({alias}): {e}", "ERROR")
-            context.close()
+            except Exception as e:
+                logger(f"Error FB React ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
 
     @staticmethod
     def fb_comment(alias, url, comments, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
         if not url: return
-        if isinstance(comments, str):
-            comments = [comments]
+        if isinstance(comments, str): comments = [comments]
         comments = [c.strip() for c in comments if c.strip()]
 
-        # Si no hay comentarios y se solicita IA, intentamos generar uno contextual
         use_ai = kwargs.get('use_ai', False)
         ai_model = kwargs.get('ai_model', 'local_fallback')
         use_vision = kwargs.get('use_vision', False)
 
-        count = len(comments)
         with sync_playwright() as p:
-            context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-            page = manejar_login(context, alias, headless)
-            if page:
-                try:
-                    page.goto(url)
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                if page:
+                    page.goto(url, timeout=60000)
                     simulate_human_behavior(page)
                     human_sleep(2, 4)
-                    # Generar comentario con IA si es necesario
+
+                    # Lógica IA
                     if (not comments or comments == [""]) and use_ai:
                         try:
                             post_text = page.evaluate("""() => {
                                 const sel = document.querySelector('[data-testid="post_message"]') || document.querySelector('article');
                                 return sel ? sel.innerText : document.body.innerText.slice(0,1000);
                             }""")
-                        except Exception:
-                            post_text = ""
-
-                        generated = ""
-                        if post_text and post_text.strip():
-                            generated = generate_comment_from_text(post_text, model=ai_model, use_vision=use_vision)
-                        elif use_vision:
-                            try:
-                                img = page.evaluate("""() => { const i = document.querySelector('article img'); return i ? i.src : null }""")
-                            except Exception:
-                                img = None
-                            caption = caption_from_image_url(img)
-                            generated = generate_comment_from_text(caption, model=ai_model, use_vision=use_vision)
-
-                        if generated:
-                            comments = [generated]
+                            generated = generate_comment_from_text(post_text, model=ai_model)
+                            if generated: comments = [generated]
+                        except: pass
 
                     comentarios_realizados = 0
-                    
                     for i, comment_text in enumerate(comments):
                         try:
-                            logger(f"FB: Intentando comentario {i+1}/{count}: '{comment_text[:30]}...' ({alias})", "INFO")
-                            
-                            # Scroll para encontrar más posts si es necesario
-                            if i > 0:
-                                page.mouse.wheel(0, random.randint(300, 800))
-                                human_sleep(2, 4)
-                            
-                            # Intentar abrir caja de comentario si está colapsada
+                            # Intentar abrir caja
                             btn_comm = page.locator('div[role="button"]').filter(has_text=re.compile(r"Comentar|Comment", re.IGNORECASE)).first
-                            if btn_comm.is_visible(timeout=3000): 
-                                btn_comm.click(force=True)
-                                human_sleep(1, 2)
+                            if btn_comm.is_visible(timeout=3000): btn_comm.click(force=True)
                             
-                            # Escribir en caja editable
                             box = page.locator('div[role="textbox"][contenteditable="true"]').first
                             if box.is_visible(timeout=5000):
                                 box.click(force=True)
-                                human_sleep(0.5, 1)
-                                
-                                # Limpiar cualquier texto previo
-                                page.keyboard.press("Control+A")
-                                human_sleep(0.3, 0.5)
-                                
-                                # Escribir con retardo humano
                                 page.keyboard.type(comment_text, delay=random.randint(50, 150))
-                                human_sleep(0.5, 1.5)
+                                human_sleep(0.5, 1)
                                 page.keyboard.press("Enter")
-                                human_sleep(2, 4)  # Esperar a que se publique
-                                
+                                human_sleep(3, 5) # Espera importante para que se publique
                                 comentarios_realizados += 1
-                                logger(f"FB: Comentario {i+1} publicado: '{comment_text[:30]}...' ({alias})", "SUCCESS")
-                            else:
-                                logger(f"FB: Caja de comentarios no accesible en intento {i+1}", "WARN")
-                                if i == 0:
-                                    break  # Si el primero falla, salir
+                                logger(f"FB: Comentario enviado: '{comment_text[:20]}...'", "SUCCESS")
                         except Exception as e:
-                            logger(f"FB: Error en comentario {i+1}: {e}", "WARN")
-                            if i == 0:
-                                break
-                    
+                            logger(f"Error comentando: {e}", "WARN")
+
                     if comentarios_realizados > 0:
-                        logger(f"FB: Total comentarios publicados: {comentarios_realizados}/{count} ({alias})", "SUCCESS")
                         save_screenshot_log(page, alias, "fb_comment")
                         update_preview_cb()
-                    else:
-                        logger(f"FB: No se pudo publicar ningún comentario ({alias})", "ERROR")
-                except Exception as e:
-                    logger(f"Error FB Comment ({alias}): {e}", "ERROR")
-            context.close()
+            except Exception as e:
+                logger(f"Error FB Comment ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
 
     # =========================================================================
-    #                               INSTAGRAM
+    #                               INSTAGRAM (CORREGIDO)
     # =========================================================================
-    @staticmethod
-    # =========================================================================
-    # REEMPLAZA ESTA FUNCIÓN EN TU ARCHIVO bot_logic.py
-    # =========================================================================
-
     @staticmethod
     def ig_like(alias, url, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
         if not url: return
         with sync_playwright() as p:
-            context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-            page = manejar_login(context, alias, headless)
-            if page:
-                try:
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                if page:
                     logger(f"Navegando al post IG...", "INFO")
-                    page.goto(url)
-                    # Espera inicial para que cargue la interfaz
-                    page.wait_for_timeout(3000) 
+                    page.goto(url, timeout=60000)
+                    human_sleep(2, 4)
                     simulate_human_behavior(page)
-                    
-                    # 1. VERIFICAR ESTADO INICIAL
-                    # Buscamos si YA tiene like (aria-label="Ya no me gusta" o "Unlike")
+
+                    # Verificar si ya tiene like
                     already_liked = page.locator('svg[aria-label="Ya no me gusta"], svg[aria-label="Unlike"]').first
                     if already_liked.is_visible():
                         logger(f"IG: Este post YA tenía like ({alias})", "WARN")
-                        save_screenshot_log(page, alias, "ig_already_liked")
-                        context.close()
-                        return
-
-                    # 2. INTENTO PRINCIPAL: CLIC EN BOTÓN
-                    logger("IG: Intentando dar Like...", "INFO")
-                    like_svg = page.locator('svg[aria-label="Me gusta"], svg[aria-label="Like"]').first
-                    
-                    clicked = False
-                    if like_svg.is_visible():
-                        try:
-                            # Intentamos clic en el padre (zona más grande)
-                            like_svg.locator('xpath=..').click(force=True)
-                            clicked = True
-                        except:
+                    else:
+                        # Intentar dar like
+                        like_svg = page.locator('svg[aria-label="Me gusta"], svg[aria-label="Like"]').first
+                        if like_svg.is_visible():
                             like_svg.click(force=True)
-                            clicked = True
-                    
-                    # Si no encontró botón, usa doble clic en imagen
-                    if not clicked:
-                        media = page.locator('article div[role="button"], article img').first
-                        if media.is_visible():
-                            media.dblclick(force=True, delay=100)
-                            clicked = True
-                            logger("IG: Botón no visto, usé Doble Clic.", "INFO")
-
-                    # 3. VERIFICACIÓN INTELIGENTE (ESPERA ACTIVA)
-                    # Esperamos hasta 5 segundos a que aparezca el estado "Ya no me gusta"
-                    try:
-                        # Buscamos el indicador de éxito
-                        indicator = page.locator('svg[aria-label="Ya no me gusta"], svg[aria-label="Unlike"]')
-                        indicator.wait_for(state="visible", timeout=5000)
-                        logger(f"IG: ❤️ Like CONFIRMADO visualmente ({alias})", "SUCCESS")
-                    except:
-                        # 4. SOLO SI FALLA LA VERIFICACIÓN VISUAL, USAMOS PLAN B (TECLA L)
-                        logger("IG: No se detectó cambio de color. Intentando tecla 'L'...", "WARN")
-                        page.keyboard.press("l")
-                        human_sleep(1, 2)
-                        
-                        # Verificación final post-teclazo
-                        if page.locator('svg[aria-label="Ya no me gusta"], svg[aria-label="Unlike"]').is_visible():
-                            logger(f"IG: Like recuperado con teclado ({alias})", "SUCCESS")
                         else:
-                            logger(f"IG: Falló el Like definitivamente ({alias})", "ERROR")
-
-                    save_screenshot_log(page, alias, "ig_like")
-                    update_preview_cb()
-
-                except Exception as e:
-                    logger(f"Error IG Like ({alias}): {e}", "ERROR")
-            context.close()
-
-
+                            # Fallback doble clic
+                            page.locator('article img').first.dblclick(force=True)
+                        
+                        logger(f"IG: Like enviado ({alias})", "SUCCESS")
+                        save_screenshot_log(page, alias, "ig_like")
+                        update_preview_cb()
+            except Exception as e:
+                logger(f"Error IG Like ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
 
     @staticmethod
     def ig_comment(alias, url, comments, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
-        if not url or not comments: return
-        if isinstance(comments, str):
-            comments = [comments]  # Convertir string único a lista
-        comments = [c.strip() for c in comments if c.strip()]  # Filtrar vacíos
-        if not comments: return
-        
-        count = len(comments)
+        if not url: return
+        if isinstance(comments, str): comments = [comments]
+        comments = [c.strip() for c in comments if c.strip()]
+
         with sync_playwright() as p:
-            context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-            page = manejar_login(context, alias, headless)
-            if page:
-                try:
-                    page.goto(url)
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                if page:
+                    page.goto(url, timeout=60000)
                     human_sleep(3, 5)
-
-                    # Si no hay comentarios y se solicita IA, generarlos
-                    use_ai = kwargs.get('use_ai', False)
-                    ai_model = kwargs.get('ai_model', 'local_fallback')
-                    use_vision = kwargs.get('use_vision', False)
-
-                    if (not comments or comments == [""]) and use_ai:
-                        try:
-                            post_text = page.evaluate("() => { const sel = document.querySelector('article') || document.querySelector('main'); return sel ? sel.innerText : document.body.innerText.slice(0,500); }")
-                        except Exception:
-                            post_text = ""
-
-                        generated = ""
-                        if post_text and post_text.strip():
-                            generated = generate_comment_from_text(post_text, model=ai_model, use_vision=use_vision)
-                        elif use_vision:
-                            try:
-                                img = page.evaluate("() => { const i = document.querySelector('article img'); return i ? i.src : null }")
-                            except Exception:
-                                img = None
-                            caption = caption_from_image_url(img)
-                            generated = generate_comment_from_text(caption, model=ai_model, use_vision=use_vision)
-
-                        if generated:
-                            comments = [generated]
-
-                    comentarios_realizados = 0
-
-                    for i, comment_text in enumerate(comments):
-                        try:
-                            logger(f"IG: Intentando comentario {i+1}/{count}: '{comment_text[:30]}...' ({alias})", "INFO")
-                            
-                            # Scroll para cargar más contenido si es necesario
-                            if i > 0:
-                                page.mouse.wheel(0, random.randint(200, 500))
-                                human_sleep(2, 3)
-                            
-                            area = page.locator('textarea[aria-label*="comentario"], textarea[aria-label*="comment"]').first
-                            if area.is_visible(timeout=5000):
-                                area.click(force=True)
-                                human_sleep(0.5, 1)
-                                
-                                # Limpiar cualquier texto previo
-                                page.keyboard.press("Control+A")
-                                human_sleep(0.3, 0.5)
-                                
-                                page.keyboard.type(comment_text, delay=random.randint(50, 100))
-                                human_sleep(0.5, 1)
-                                page.keyboard.press("Enter")
-                                human_sleep(2, 4)  # Esperar publicación
-                                
-                                comentarios_realizados += 1
-                                logger(f"IG: Comentario {i+1} enviado: '{comment_text[:30]}...' ({alias})", "SUCCESS")
-                            else:
-                                logger(f"IG: Área de comentario no disponible en intento {i+1}", "WARN")
-                                if i == 0:
-                                    break
-                        except Exception as e:
-                            logger(f"IG: Error en comentario {i+1}: {e}", "WARN")
-                            if i == 0:
-                                break
                     
-                    if comentarios_realizados > 0:
-                        logger(f"IG: Total comentarios publicados: {comentarios_realizados}/{count} ({alias})", "SUCCESS")
+                    area = page.locator('textarea[aria-label*="comentario"], textarea[aria-label*="comment"]').first
+                    if area.is_visible(timeout=5000):
+                        for comment in comments:
+                            area.click(force=True)
+                            page.keyboard.type(comment, delay=random.randint(50, 100))
+                            human_sleep(0.5, 1)
+                            page.keyboard.press("Enter")
+                            human_sleep(2, 4)
+                            logger(f"IG: Comentario enviado ({alias})", "SUCCESS")
+                        
                         save_screenshot_log(page, alias, "ig_comment")
                         update_preview_cb()
                     else:
-                        logger(f"IG: No se pudo publicar ningún comentario ({alias})", "ERROR")
-                except Exception as e:
-                    logger(f"Error IG Comment ({alias}): {e}", "ERROR")
-            context.close()
+                        logger("IG: Caja de comentarios no encontrada", "ERROR")
+            except Exception as e:
+                logger(f"Error IG Comment ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
+
+    # ... (MANTÉN EL RESTO DE MÉTODOS TT_LIKE, YT_LIKE, ETC. SIN CAMBIOS SI YA FUNCIONABAN) ...
+    # Asegúrate de agregar el bloque finally: try: context.close() except: pass en todos.
 
     # =========================================================================
     #                                TIKTOK
@@ -670,8 +510,10 @@ class SocialActions:
                                             try:
                                                 page.keyboard.press("Escape")
                                                 human_sleep(1, 2)
-                                            except:
-                                                pass
+                                            except Exception as e:
+                                                logger(f"X: Aviso: No se pudo presionar Escape: {e}", "WARN")
+
+                        
                                     else:
                                         logger(f"X: Botón enviar no visible en intento {i+1}", "WARN")
                                 else:
@@ -700,11 +542,13 @@ class SocialActions:
     # =========================================================================
     #                        CALENTAMIENTO (WARMUP)
     # =========================================================================
+
     @staticmethod
-    def warmup(alias, minutes, headless, logger, update_preview_cb, mobile_proxy=None, random_likes=False, **kwargs):
+    def warmup(alias, minutes, headless, logger, update_preview_cb, mobile_proxy=None, random_likes=False, friend_requests=False, friend_request_limit=5, **kwargs):
         """
-        Rutina de navegación pasiva para generar historial y confianza (Cookies/Cache).
-        Opcionalmente da me gustas ocasionales en publicaciones.
+        Rutina de calentamiento COMPLETA:
+        1. (Opcional) Busca amigos en sugerencias y envía solicitudes.
+        2. Navega el feed, ve historias y da likes.
         """
         with sync_playwright() as p:
             context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
@@ -712,173 +556,132 @@ class SocialActions:
             
             if page:
                 try:
-                    logger(f"🔥 Iniciando Warmup: {alias} ({minutes} min)", "WARMUP")
-                    if random_likes:
-                        logger(f"👍 Me gustas ocasionales activados", "INFO")
+                    logger(f"🔥 Warmup INICIADO: {alias} ({minutes} min)", "WARMUP")
                     
+                    # =================================================================
+                    # FASE 1: SOLICITUDES DE AMISTAD (Si está activado)
+                    # =================================================================
+                    if friend_requests:
+                        try:
+                            logger("👥 Fase 1: Buscando sugerencias de amistad...", "INFO")
+                            # Navegar directamente a sugerencias (según tu imagen 2)
+                            page.goto("https://www.facebook.com/friends/suggestions")
+                            human_sleep(3, 5)
+                            
+                            enviadas = 0
+                            intentos_scroll = 0
+                            
+                            while enviadas < friend_request_limit and intentos_scroll < 10:
+                                # Buscar botones "Agregar a amigos" visibles
+                                # Usamos selectores robustos para el texto en español
+                                botones = page.locator('div[role="button"] span').filter(has_text="Agregar a amigos").all()
+                                
+                                # Si no hay botones, hacemos scroll
+                                if not botones:
+                                    logger("📜 Scrolleando para buscar más personas...", "INFO")
+                                    page.mouse.wheel(0, random.randint(500, 800))
+                                    human_sleep(2, 4)
+                                    intentos_scroll += 1
+                                    continue
+                                
+                                # Seleccionar un botón aleatorio de los visibles (comportamiento humano: no siempre es el primero)
+                                btn = random.choice(botones[:4]) # Elegir entre los primeros 4 visibles
+                                
+                                if btn.is_visible():
+                                    # Mover mouse hacia el botón suavemente
+                                    btn.hover()
+                                    human_sleep(0.5, 1.5) # "Pensar" si agregarlo
+                                    
+                                    # Clic
+                                    btn.click()
+                                    enviadas += 1
+                                    logger(f"✅ Solicitud enviada ({enviadas}/{friend_request_limit})", "SUCCESS")
+                                    
+                                    # Pausa humana entre solicitudes (importante para evitar bloqueos)
+                                    human_sleep(3, 7)
+                                    
+                                    # A veces, scrollear un poco después de agregar
+                                    if random.random() > 0.5:
+                                        page.mouse.wheel(0, random.randint(100, 300))
+                                        human_sleep(1, 2)
+                                
+                                update_preview_cb()
+                            
+                            logger(f"👥 Fase de amigos completada. Volviendo al Feed...", "INFO")
+                        except Exception as e:
+                            logger(f"⚠️ Error en fase de amigos: {e}", "WARN")
+
+                    # =================================================================
+                    # FASE 2: NAVEGACIÓN EN FEED (STORIES + LIKES)
+                    # =================================================================
                     start_time = time.time()
                     end_time = start_time + (minutes * 60)
                     likes_count = 0
-                    last_reload = time.time()
-                    reload_interval = 120  # Recargar cada 2 minutos
+                    stories_watched = 0
                     
-                    page.goto("https://www.facebook.com/")
-                    page.wait_for_timeout(2000)
+                    if page.url != "https://www.facebook.com/":
+                        page.goto("https://www.facebook.com/")
                     
+                    human_sleep(3, 6)
+
                     while time.time() < end_time:
                         remaining = int((end_time - time.time()) / 60)
-                        logger(f"{alias}: Actividad en curso... (~{remaining}m restantes)", "INFO")
-                        
-                        # Recargar página cada 2 minutos para nuevas publicaciones
-                        current_time = time.time()
-                        if current_time - last_reload > reload_interval:
-                            logger(f"🔄 Recargando página para nuevas publicaciones...", "INFO")
-                            page.reload()
-                            page.wait_for_timeout(2500)
-                            last_reload = current_time
-                            human_sleep(1, 2)
-                        
-                        # 1. Dar me gusta ocasionalmente A VARIAS PUBLICACIONES
-                        if random_likes and random.random() > 0.65:  # 35% de probabilidad
+                        if remaining % 2 == 0: # Loguear cada tanto para no saturar
+                             logger(f"{alias}: Navegando feed... (~{remaining}m restantes)", "INFO")
+
+                        # 1. Ver Historias (Stories)
+                        if random.random() > 0.85:
                             try:
-                                # Buscar TODOS los botones "Me gusta" visibles en el feed
-                                direct_likes = page.locator('button[aria-label="Me gusta"], button:has-text("Me gusta")')
-                                likes_found = direct_likes.count()
+                                stories = page.locator('div[aria-label^="Historia de"], div[aria-label^="Story by"]').first
+                                if stories.is_visible():
+                                    logger("👀 Viendo historia...", "INFO")
+                                    stories.click()
+                                    human_sleep(4, 10)
+                                    page.keyboard.press("Escape")
+                                    stories_watched += 1
+                                    human_sleep(2, 3)
+                            except: pass
+
+                        # 2. Scroll y Lectura
+                        scroll_amount = random.randint(300, 900)
+                        page.mouse.wheel(0, scroll_amount)
+                        human_sleep(2, 6) # Tiempo de lectura
+                        
+                        # 3. Dar Likes Ocasionales
+                        if random_likes and random.random() > 0.75:
+                            try:
+                                # Busca botones "Me gusta" visibles usando lógica JS para asegurar visibilidad
+                                like_selector = 'div[role="button"][aria-label="Me gusta"]'
+                                found = page.evaluate(f"""() => {{
+                                    const btns = Array.from(document.querySelectorAll('{like_selector}'));
+                                    const visible = btns.find(b => {{
+                                        const r = b.getBoundingClientRect();
+                                        return r.top > 0 && r.bottom < window.innerHeight;
+                                    }});
+                                    if (visible) {{ visible.click(); return true; }}
+                                    return false;
+                                }}""")
                                 
-                                if likes_found > 0:
-                                    # Dar me gusta a varios (no solo el primero)
-                                    num_to_like = random.randint(1, min(likes_found, 3))  # Dar me gusta a 1-3
-                                    liked_indices = random.sample(range(likes_found), num_to_like)
-                                    
-                                    for idx in liked_indices:
-                                        try:
-                                            like_btn = direct_likes.nth(idx)
-                                            if like_btn.is_visible():
-                                                like_btn.click(force=True)
-                                                likes_count += 1
-                                                logger(f"👍 Me gusta dado en feed ({likes_count})", "INFO")
-                                                human_sleep(1, 2)
-                                        except Exception:
-                                            continue
-                                else:
-                                    # Intento 2: Buscar botón de reacciones
-                                    reaction_buttons = page.locator(
-                                        'button[aria-label*="Reaccion"], button[data-testid*="reaction"], '
-                                        'div[role="button"][aria-label*="Reaccion"]'
-                                    )
-                                    
-                                    if reaction_buttons.count() > 0:
-                                        react_count = reaction_buttons.count()
-                                        num_reactions = min(react_count, 2)
-                                        react_indices = random.sample(range(react_count), num_reactions)
-                                        
-                                        for react_idx in react_indices:
-                                            try:
-                                                react_btn = reaction_buttons.nth(react_idx)
-                                                if react_btn.is_visible():
-                                                    react_btn.click(force=True)
-                                                    page.wait_for_timeout(500)
-                                                    
-                                                    like_option = page.locator('button[aria-label="Me gusta"]')
-                                                    if like_option.count() > 0:
-                                                        like_option.first.click(force=True)
-                                                        likes_count += 1
-                                                        logger(f"👍 Me gusta dado en feed ({likes_count})", "INFO")
-                                                        human_sleep(1, 2)
-                                            except Exception:
-                                                continue
-                            except Exception as e:
-                                logger(f"⚠️ Error dando me gustas: {str(e)[:50]}", "WARN")
-                        
-                        # 2. Hacer clic en videos/reels ocasionalmente
-                        if random.random() > 0.75:  # 25% de probabilidad
-                            try:
-                                # Buscar videos/reels para hacer clic
-                                video_links = page.locator('a[href*="/reel/"], a[href*="/video/"], a[href*="/watch/"]')
-                                if video_links.count() > 0:
-                                    video_idx = random.randint(0, min(video_links.count() - 1, 2))
-                                    video_link = video_links.nth(video_idx)
-                                    if video_link.is_visible():
-                                        video_link.click(force=True)
-                                        logger(f"🎬 Abriendo video/reel...", "INFO")
-                                        page.wait_for_timeout(2000)
-                                        
-                                        # Dar me gusta al reel/video
-                                        try:
-                                            reel_likes = page.locator('button[aria-label="Me gusta"], svg[aria-label="Me gusta"]')
-                                            if reel_likes.count() > 0:
-                                                # Si es SVG, buscar su padre botón
-                                                first_like = reel_likes.first
-                                                try:
-                                                    first_like.click(force=True)
-                                                except:
-                                                    # Si es SVG, buscar el botón padre
-                                                    parent = first_like.locator('xpath=ancestor::button')
-                                                    if parent.count() > 0:
-                                                        parent.first.click(force=True)
-                                                
-                                                likes_count += 1
-                                                logger(f"👍 Me gusta dado en reel/video ({likes_count})", "INFO")
-                                                human_sleep(1.5, 2.5)
-                                        except Exception as e:
-                                            logger(f"⚠️ Error al dar me gusta al reel: {str(e)[:40]}", "WARN")
-                                        
-                                        # Salir del reel/video - usar go_back() en lugar de ESC
-                                        try:
-                                            # Intento 1: Buscar botón X o cerrar
-                                            close_btns = page.locator('button[aria-label*="Cerrar"], button[aria-label*="Close"], svg[aria-label*="Cerrar"]')
-                                            if close_btns.count() > 0:
-                                                close_btns.first.click(force=True)
-                                                logger(f"❌ Cerrando reel/video (botón cerrar)", "INFO")
-                                                page.wait_for_timeout(1500)
-                                            else:
-                                                # Intento 2: Usar go_back() para volver a la página anterior
-                                                logger(f"❌ Volviendo al feed (go_back)", "INFO")
-                                                page.go_back()
-                                                page.wait_for_timeout(2000)
-                                        except Exception:
-                                            # Intento 3: Si go_back() falla, ir directamente al home
-                                            try:
-                                                logger(f"❌ Volviendo al feed (home)", "INFO")
-                                                page.goto("https://www.facebook.com/")
-                                                page.wait_for_timeout(2000)
-                                            except:
-                                                pass
-                                        
-                                        human_sleep(1, 2)
-                            except Exception as e:
-                                logger(f"⚠️ Error con reel: {str(e)[:40]}", "WARN")
-                        
-                        # 3. Scroll natural - bajar y explorar el feed
-                        scroll_pixels = random.randint(400, 1500)
-                        page.mouse.wheel(0, scroll_pixels)
-                        human_sleep(3, 8)
-                        
-                        # De vez en cuando, subir un poco para ver publicaciones anteriores (comportamiento natural)
-                        if random.random() > 0.85:  # 15% de probabilidad
-                            logger(f"⬆️ Subiendo en el feed (comportamiento natural)", "INFO")
-                            scroll_up = random.randint(200, 600)
-                            page.mouse.wheel(0, -scroll_up)
-                            human_sleep(2, 4)
-                        
-                        # 4. Movimiento de mouse
+                                if found:
+                                    likes_count += 1
+                                    logger(f"👍 Like dado en feed ({likes_count})", "SUCCESS")
+                                    human_sleep(1, 2)
+                            except: pass
+
                         simulate_human_behavior(page)
-                        
-                        # 4. Pausa de "lectura" aleatoria
-                        if random.random() > 0.8:
-                            human_sleep(8, 15)
-                            
-                        # Actualizar UI
                         update_preview_cb()
 
-                    logger(f"✅ Warmup completado para {alias} ({likes_count} me gustas dados)", "SUCCESS")
+                    logger(f"✅ Warmup FINALIZADO: {alias} (Solicitudes: {enviadas if friend_requests else 0}, Likes: {likes_count})", "SUCCESS")
+                
                 except Exception as e:
-                    logger(f"❌ Error en Warmup ({alias}): {e}", "ERROR")
+                    logger(f"❌ Error Crítico en Warmup ({alias}): {e}", "ERROR")
+                    save_screenshot_log(page, alias, "error_warmup")
                 finally:
                     context.close()
             else:
-                logger(f"❌ No se pudo iniciar sesión para Warmup ({alias})", "ERROR")
+                logger(f"❌ No se pudo iniciar sesión ({alias})", "ERROR")
                 context.close()
+
 
     @staticmethod
     def find_and_add_friends(alias, headless, logger, update_preview_cb, mobile_proxy=None, limit=20, platform="facebook", **kwargs):

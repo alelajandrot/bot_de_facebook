@@ -6,6 +6,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from tkinter import messagebox
 from PIL import Image
+import subprocess  # <--- AGREGAR ESTO AL INICIO CON LOS OTROS IMPORTS
 
 # --- ESTA ES LA LÍNEA QUE FALTABA ---
 from playwright.sync_api import sync_playwright 
@@ -23,6 +24,7 @@ try:
     from browser_handler import get_browser_context
     from bot_logic import SocialActions
     from mobile_manager import get_mobile_manager, check_adb_available
+    from utils import exportar_cuenta_excel
 except ImportError as e:
     messagebox.showerror("Error de Dependencias", f"Faltan archivos necesarios:\n{e}")
     exit()
@@ -49,120 +51,124 @@ class SocialBotApp(ctk.CTk):
         self.setup_sidebar()
         self.setup_main_tabs()
         self.setup_console()
-
+        self.mobile_manager = get_mobile_manager(logger=self.log)
     # =========================================================================
     #                       PANEL LATERAL (SIDEBAR)
     # =========================================================================
     def setup_sidebar(self):
-        # Sidebar con gradiente visual (fondo oscuro con toque azul)
-        self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=("#0f172a", "#0f172a"))
-        self.sidebar.grid(row=0, column=0, sticky="nsew")
-        self.sidebar.grid_propagate(False)
-        
-        # Header con título - Premium style
-        header_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=15)
-        header_frame.pack(fill="x", padx=12, pady=(15, 10))
-        
-        ctk.CTkLabel(header_frame, text="🤖", font=("Segoe UI", 40)).pack(pady=(12, 5))
-        ctk.CTkLabel(header_frame, text="FARM CONTROL", font=("Segoe UI", 20, "bold"), text_color="#60a5fa").pack()
-        ctk.CTkLabel(header_frame, text="Social Bot Manager Pro", font=("Segoe UI", 10), text_color="#93c5fd").pack(pady=(3, 12))
-        
-        # Separador elegante
-        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=12)
-        
-        # Sección: Configuración de Ejecución
-        config_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        config_frame.pack(fill="x", padx=12, pady=5)
-        ctk.CTkLabel(config_frame, text="⚙️ CONFIGURACIÓN", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 12))
-        
-        self.var_headless = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(config_frame, text="👁️ Modo Oculto", variable=self.var_headless,
-                       font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=6)
-        
-        self.var_batch = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(config_frame, text="🔥 Modo Masivo", variable=self.var_batch, 
-                       fg_color="#ef4444", hover_color="#dc2626",
-                       font=("Segoe UI", 10, "bold"), text_color="#fecaca").pack(anchor="w", pady=6)
-        
-        self.var_mobile_mode = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(config_frame, text="📱 Modo Móvil (ADB)", variable=self.var_mobile_mode,
-                       fg_color="#0ea5e9", hover_color="#0284c7",
-                       font=("Segoe UI", 10, "bold"), text_color="#bae6fd",
-                       command=self.on_mobile_mode_toggle).pack(anchor="w", pady=6)
+            # Sidebar con gradiente visual (fondo oscuro con toque azul)
+            self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=("#0f172a", "#0f172a"))
+            self.sidebar.grid(row=0, column=0, sticky="nsew")
+            self.sidebar.grid_propagate(False)
+            
+            # --- HEADER ---
+            header_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=15)
+            header_frame.pack(fill="x", padx=12, pady=(15, 10))
+            
+            ctk.CTkLabel(header_frame, text="🤖", font=("Segoe UI", 40)).pack(pady=(12, 5))
+            ctk.CTkLabel(header_frame, text="FARM CONTROL", font=("Segoe UI", 20, "bold"), text_color="#60a5fa").pack()
+            ctk.CTkLabel(header_frame, text="Social Bot Manager Pro", font=("Segoe UI", 10), text_color="#93c5fd").pack(pady=(3, 12))
+            
+            # Separador
+            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
+            
+            # --- CONFIGURACIÓN ---
+            config_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+            config_frame.pack(fill="x", padx=12, pady=5)
+            ctk.CTkLabel(config_frame, text="⚙️ CONFIGURACIÓN", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 8))
+            
+            self.var_headless = ctk.BooleanVar(value=False)
+            ctk.CTkCheckBox(config_frame, text="👁️ Modo Oculto", variable=self.var_headless,
+                        font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=4)
+            
+            self.var_batch = ctk.BooleanVar(value=False)
+            ctk.CTkCheckBox(config_frame, text="🔥 Modo Masivo", variable=self.var_batch, 
+                        fg_color="#ef4444", hover_color="#dc2626",
+                        font=("Segoe UI", 10, "bold"), text_color="#fecaca").pack(anchor="w", pady=4)
+            
+            self.var_mobile_mode = ctk.BooleanVar(value=False)
+            ctk.CTkCheckBox(config_frame, text="📱 Modo Móvil (ADB)", variable=self.var_mobile_mode,
+                        fg_color="#0ea5e9", hover_color="#0284c7",
+                        font=("Segoe UI", 10, "bold"), text_color="#bae6fd",
+                        command=self.on_mobile_mode_toggle).pack(anchor="w", pady=4)
 
-        # IA Generativa
-        self.var_use_ai = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(config_frame, text="🧠 Cerebro (IA)", variable=self.var_use_ai,
-                   font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=6)
+            self.var_use_ai = ctk.BooleanVar(value=False)
+            ctk.CTkCheckBox(config_frame, text="🧠 Cerebro (IA)", variable=self.var_use_ai,
+                    font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=4)
 
-        # Selector modelo IA
-        self.ai_model_selector = ctk.CTkComboBox(config_frame, values=["ollama","local_fallback"], width=220, font=("Segoe UI", 9))
-        self.ai_model_selector.set("local_fallback")
-        self.ai_model_selector.pack(anchor="w", pady=(6, 10))
+            # Separador
+            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
 
-        # Vision para imágenes
-        self.var_use_vision = ctk.BooleanVar(value=False)
-        ctk.CTkCheckBox(config_frame, text="🔎 Visión (LLaVA)", variable=self.var_use_vision,
-                   font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=6)
+            # --- HILOS (WORKERS) ---
+            workers_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=10)
+            workers_frame.pack(fill="x", padx=12, pady=5)
+            
+            ctk.CTkLabel(workers_frame, text="🔀 Hilos Simultáneos", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=12, pady=(8, 4))
+            
+            slider_container = ctk.CTkFrame(workers_frame, fg_color="transparent")
+            slider_container.pack(fill="x", padx=12, pady=(0, 8))
+            
+            self.lbl_workers = ctk.CTkLabel(slider_container, text="1", font=("Segoe UI", 13, "bold"), 
+                                        width=35, fg_color="#0284c7", text_color="white", corner_radius=6)
+            self.lbl_workers.pack(side="right", padx=(8, 0))
+            
+            self.slider_workers = ctk.CTkSlider(slider_container, from_=1, to=10, number_of_steps=9, 
+                                            command=lambda v: self.lbl_workers.configure(text=str(int(v))),
+                                            fg_color="#1e40af", progress_color="#0284c7")
+            self.slider_workers.pack(side="left", fill="x", expand=True)
+            self.slider_workers.set(1)
 
-        # Separador elegante
-        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=12)
+            # Separador
+            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
 
-        # Slider de Hilos - Premium style
-        workers_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=10)
-        workers_frame.pack(fill="x", padx=12, pady=8)
-        
-        ctk.CTkLabel(workers_frame, text="🔀 Hilos Simultáneos", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=12, pady=(10, 8))
-        
-        slider_container = ctk.CTkFrame(workers_frame, fg_color="transparent")
-        slider_container.pack(fill="x", padx=12, pady=(0, 10))
-        
-        self.lbl_workers = ctk.CTkLabel(slider_container, text="1", font=("Segoe UI", 13, "bold"), 
-                                       width=35, fg_color="#0284c7", text_color="white", corner_radius=6)
-        self.lbl_workers.pack(side="right", padx=(8, 0))
-        
-        self.slider_workers = ctk.CTkSlider(slider_container, from_=1, to=10, number_of_steps=9, 
-                                           command=lambda v: self.lbl_workers.configure(text=str(int(v))),
-                                           fg_color="#1e40af", progress_color="#0284c7")
-        self.slider_workers.pack(side="left", fill="x", expand=True)
-        self.slider_workers.set(1)
+            # --- ACCIONES RÁPIDAS + RED (OPTIMIZADO) ---
+            actions_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+            actions_frame.pack(fill="x", padx=12, pady=5)
+            ctk.CTkLabel(actions_frame, text="⚡ ACCIONES RÁPIDAS", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 5))
+            
+            # Botones un poco más bajos (height=32) para ahorrar espacio
+            ctk.CTkButton(actions_frame, text="🔄 Refrescar Listas", command=self.on_tab_change, 
+                        border_width=0, fg_color="#1e40af", hover_color="#1e3a8a", text_color="#60a5fa",
+                        font=("Segoe UI", 10, "bold"), height=32, corner_radius=8).pack(fill="x", pady=4)
+            
+            ctk.CTkButton(actions_frame, text="🔑 Login Manual", 
+                        command=lambda: self.run_manual_login(None),
+                        fg_color="#f97316", hover_color="#ea580c", text_color="#ffffff",
+                        font=("Segoe UI", 10, "bold"), height=32, corner_radius=8).pack(fill="x", pady=4)
 
-        # Separador elegante
-        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=12)
+            # >> AQUÍ ESTÁ EL SWITCH DE ETHERNET INTEGRADO <<
+            eth_container = ctk.CTkFrame(actions_frame, fg_color="#0f172a", corner_radius=6)
+            eth_container.pack(fill="x", pady=(6, 2))
+            
+            self.var_ethernet_status = ctk.BooleanVar(value=True) 
+            
+            self.switch_ethernet = ctk.CTkSwitch(eth_container, text="Ethernet ON",
+                                                variable=self.var_ethernet_status,
+                                                onvalue=True, offvalue=False,
+                                                command=self.toggle_ethernet_adapter,
+                                                font=("Segoe UI", 10, "bold"),
+                                                height=20, switch_width=36, switch_height=18,
+                                                progress_color="#10b981", fg_color="#ef4444")
+            self.switch_ethernet.pack(padx=10, pady=8)
 
-        # Sección: Acciones Rápidas
-        actions_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-        actions_frame.pack(fill="x", padx=12, pady=5)
-        ctk.CTkLabel(actions_frame, text="⚡ ACCIONES RÁPIDAS", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 10))
-        
-        ctk.CTkButton(actions_frame, text="🔄 Refrescar Listas", command=self.on_tab_change, 
-                     border_width=0, fg_color="#1e40af", hover_color="#1e3a8a", text_color="#60a5fa",
-                     font=("Segoe UI", 10, "bold"), height=38, corner_radius=8).pack(fill="x", pady=6)
-        
-        ctk.CTkButton(actions_frame, text="🔑 Login Manual", 
-                     command=lambda: self.run_manual_login(None),
-                     fg_color="#f97316", hover_color="#ea580c", text_color="#ffffff",
-                     font=("Segoe UI", 10, "bold"), height=38, corner_radius=8).pack(fill="x", pady=6)
+            # Separador final
+            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
 
-        # Separador elegante
-        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=12)
-
-        # Vista Previa de Pantalla (en la parte inferior)
-        preview_frame = ctk.CTkFrame(self.sidebar, fg_color="#1e3a5f", corner_radius=12)
-        preview_frame.pack(side="bottom", fill="both", padx=12, pady=15, expand=True)
-        
-        preview_header = ctk.CTkLabel(preview_frame, text="📸 Última Actividad", 
-                                      font=("Segoe UI", 12, "bold"), text_color="#60a5fa")
-        preview_header.pack(anchor="w", padx=12, pady=(12, 8))
-        
-        self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Sin imagen]", 
-                                          fg_color="#0f172a", corner_radius=10,
-                                          font=("Segoe UI", 9), text_color="#9ca3af",
-                                          width=280, height=140)
-        self.lbl_screenshot.pack(padx=12, pady=(0, 12), fill="both", expand=True)
-        
-        # Inicializar gestor móvil
-        self.mobile_manager = get_mobile_manager(logger=self.log)
+            # --- VISTA PREVIA (TAMAÑO REDUCIDO) ---
+            preview_frame = ctk.CTkFrame(self.sidebar, fg_color="#1e3a5f", corner_radius=12)
+            # expand=False es clave para que no empuje todo hacia arriba
+            preview_frame.pack(side="bottom", fill="x", padx=12, pady=15, expand=False)
+            
+            preview_header = ctk.CTkLabel(preview_frame, text="📸 Última Actividad", 
+                                        font=("Segoe UI", 11, "bold"), text_color="#60a5fa")
+            preview_header.pack(anchor="w", padx=12, pady=(8, 4))
+            
+            # Altura reducida a 100px (antes 140) para que quepa el switch
+            self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Sin imagen]", 
+                                            fg_color="#0f172a", corner_radius=10,
+                                            font=("Segoe UI", 9), text_color="#9ca3af",
+                                            width=280, height=100)
+            self.lbl_screenshot.pack(padx=12, pady=(0, 12), fill="both")
 
     # =========================================================================
     #                       SISTEMA DE PESTAÑAS (TABS)
@@ -201,6 +207,9 @@ class SocialBotApp(ctk.CTk):
         # Tab Especial: Estado de Cuentas
         self.tab_status = self.tabs.add("📊 Estado Cuentas")
         self.setup_status_ui()
+
+        self.tab_mobile_creator = self.tabs.add("📱 Creador Móvil")
+        self.setup_mobile_creator_ui()
         
         # Asegurar que los selectores de cuenta para cada plataforma estén poblados
         try:
@@ -361,7 +370,7 @@ class SocialBotApp(ctk.CTk):
         ctk.CTkLabel(url_frame, text="🔗 URL del Post", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=(12, 5), sticky="w")
         self.ig_url = ctk.CTkEntry(url_frame, placeholder_text="https://instagram.com/p/...", 
                                    font=("Segoe UI", 11), height=35,
-                                   fg_color="#0f172a", border_color="#1e40af", border_width=1,
+                                   fg_color="#230f2a", border_color="#1e40af", border_width=1,
                                    text_color="#e5e7eb", placeholder_text_color="#6b7280")
         self.ig_url.grid(row=1, column=0, padx=15, pady=(0, 12), sticky="ew")
         
@@ -528,6 +537,21 @@ class SocialBotApp(ctk.CTk):
     # =========================================================================
     #                       UI CALENTAMIENTO
     # =========================================================================
+# =========================================================================
+    #                        CALENTAMIENTO (WARMUP) MEJORADO
+    # =========================================================================
+# =========================================================================
+    #                        CALENTAMIENTO (WARMUP) MEJORADO
+    # =========================================================================
+
+
+
+    # =========================================================================
+    #                       MOTOR DE EJECUCIÓN
+    # =========================================================================
+# =========================================================================
+    #                       UI CALENTAMIENTO (FALTABA ESTA SECCIÓN)
+    # =========================================================================
     def setup_warmup_ui(self):
         f = self.tab_warmup
         f.grid_columnconfigure(0, weight=1)
@@ -636,26 +660,43 @@ class SocialBotApp(ctk.CTk):
                  hover_color="#c0392b", height=40, command=self.trigger_search_and_add).pack(pady=(6,8), padx=10, fill="x")
 
     def trigger_warmup(self):
-        plat_ui = self.combo_warmup_plat.get()
-        plat_key = self.plataformas.get(plat_ui, "facebook")
-        # Asegurar que la cuenta seleccionada en la UI de calentamiento se use como alias
-        selected_alias = None
-        try:
+            plat_ui = self.combo_warmup_plat.get()
+            plat_key = self.plataformas.get(plat_ui, "facebook")
+            
+            # Obtener explícitamente el alias seleccionado
             selected_alias = self.combo_warmup_account.get()
-        except Exception:
-            selected_alias = None
 
-        if selected_alias and selected_alias != "Sin cuentas":
-            # Si existe el selector global para la plataforma, sincronizamos su valor
-            if plat_key in self.account_selectors:
-                try:
-                    self.account_selectors[plat_key].set(selected_alias)
-                except Exception:
-                    pass
-        else:
-            self.log("⚠️ No se ha seleccionado una cuenta válida para el calentamiento.", "WARN")
+            if not selected_alias or selected_alias == "Sin cuentas":
+                self.log("⚠️ Selecciona una cuenta válida en la lista de Calentamiento.", "WARN")
+                return
 
-        self.start_execution("warmup", plat_key)
+            # Generar los argumentos, incluyendo el límite del slider
+            kwargs_gen = lambda alias: {
+                "alias": alias, 
+                "minutes": int(self.slider_warmup.get()),
+                # Aquí pasamos los valores de la UI a la lógica del bot
+                "friend_requests": self.var_warmup_friendreq.get(), 
+                "friend_request_limit": int(self.slider_friend_limit.get()), # <--- IMPORTANTE: El valor del slider
+                "random_likes": self.var_warmup_likes.get(),
+                "headless": self.var_headless.get(),
+                "logger": self.log,
+                "update_preview_cb": self.update_preview,
+                "use_mobile": self.var_mobile_mode.get(),
+                "use_ai": self.var_use_ai.get(),
+                "ai_model": self.ai_model_selector.get() if hasattr(self, 'ai_model_selector') else "llama3",
+                "use_vision": self.var_use_vision.get() if hasattr(self, 'var_use_vision') else False
+            }
+
+            # Ejecutar
+            threading.Thread(target=lambda: self.run_single(
+                SocialActions.warmup, 
+                plat_key, 
+                kwargs_gen, 
+                target_alias=selected_alias
+            )).start()
+
+
+
 
     def on_warmup_platform_change(self, value):
         """Actualiza la lista de cuentas disponibles cuando cambia la plataforma en el UI de Warmup."""
@@ -670,20 +711,72 @@ class SocialBotApp(ctk.CTk):
         except Exception:
             pass
 
-    # =========================================================================
-    #                       MOTOR DE EJECUCIÓN
-    # =========================================================================
+    def trigger_friendfinder(self):
+        plat_ui = self.combo_warmup_plat.get()
+        plat_key = self.plataformas.get(plat_ui, "facebook")
+        
+        selected_alias = self.combo_warmup_account.get()
+        if not selected_alias or selected_alias == "Sin cuentas":
+            self.log("⚠️ Selecciona una cuenta válida para buscar amigos.", "WARN")
+            return
+
+        target_func = SocialActions.find_and_add_friends
+        def kwargs_gen(alias):
+            return {"alias": alias, "limit": int(self.slider_friend_limit.get()), **{
+                "headless": self.var_headless.get(),
+                "logger": self.log,
+                "update_preview_cb": self.update_preview,
+                "use_mobile": self.var_mobile_mode.get(),
+                "use_ai": self.var_use_ai.get(),
+                "control_tower": False,
+            }}
+        
+        # Usamos run_single con target_alias forzado
+        threading.Thread(target=lambda: self.run_single(target_func, plat_key, kwargs_gen, target_alias=selected_alias)).start()
+
+    def trigger_search_and_add(self):
+        search_term = self.search_person_entry.get().strip()
+        if not search_term:
+            self.log("⚠️ Por favor ingresa un nombre o usuario a buscar.", "WARN")
+            return
+        
+        plat_ui = self.combo_warmup_plat.get()
+        plat_key = self.plataformas.get(plat_ui, "facebook")
+        selected_alias = self.combo_warmup_account.get()
+
+        if not selected_alias or selected_alias == "Sin cuentas":
+            self.log("⚠️ No se ha seleccionado una cuenta válida.", "WARN")
+            return
+
+        target_func = SocialActions.search_and_add_friends
+        def kwargs_gen(alias):
+            return {
+                "alias": alias, 
+                "search_term": search_term,
+                "limit": int(self.slider_person_limit.get()), 
+                "headless": self.var_headless.get(),
+                "logger": self.log,
+                "update_preview_cb": self.update_preview,
+                "use_mobile": self.var_mobile_mode.get(),
+                "use_ai": self.var_use_ai.get(),
+                "control_tower": False,
+                "platform": plat_key,
+            }
+
+        threading.Thread(target=lambda: self.run_single(target_func, plat_key, kwargs_gen, target_alias=selected_alias)).start()   
+   
+
     def start_execution(self, action_type, platform):
         if hasattr(self, 'is_running') and self.is_running:
             self.log("⚠️ El sistema está ocupado. Espera...", "WARN")
             return
 
         params = {}
+        # ... (Mantén el bloque de params igual que antes) ...
         if action_type != "warmup":
             if platform == "facebook":
                 params['url'] = self.fb_url.get()
                 params['reaction'] = self.fb_react_combo.get()
-                # Obtener todas las líneas del textbox, filtrar vacías
                 comment_lines = [line.strip() for line in self.fb_comment_txt.get("1.0", "end-1c").split('\n') if line.strip()]
                 params['comments'] = comment_lines if comment_lines else [""]
             elif platform == "instagram":
@@ -708,18 +801,21 @@ class SocialBotApp(ctk.CTk):
         target_func = None
         kwargs_gen = None
         
+        # --- AQUÍ ESTÁ LA CORRECCIÓN ---
         common_args = {
             "headless": self.var_headless.get(),
             "logger": self.log,
             "update_preview_cb": self.update_preview,
-            "use_mobile": self.var_mobile_mode.get(),  # Pasar estado del modo móvil
+            "use_mobile": self.var_mobile_mode.get(),
             "use_ai": self.var_use_ai.get(),
-            "ai_model": self.ai_model_selector.get(),
-            "use_vision": self.var_use_vision.get(),
+            # Usamos 'hasattr' para evitar el crash si el selector no existe en la UI
+            "ai_model": self.ai_model_selector.get() if hasattr(self, 'ai_model_selector') else "llama3",
+            "use_vision": self.var_use_vision.get() if hasattr(self, 'var_use_vision') else False,
             "control_tower": False
         }
+        # -------------------------------
 
-        # Mapeo de Acciones
+        # Mapeo de Acciones (El resto del código sigue igual)
         if action_type == "warmup":
             target_func = SocialActions.warmup
             kwargs_gen = lambda alias: {"alias": alias, "minutes": params['minutes'],
@@ -763,126 +859,32 @@ class SocialBotApp(ctk.CTk):
         else:
             threading.Thread(target=lambda: self.run_single(target_func, platform, kwargs_gen)).start()
 
-    def trigger_friendfinder(self):
-        plat_ui = self.combo_warmup_plat.get()
-        plat_key = self.plataformas.get(plat_ui, "facebook")
-
-        # Sincronizar la cuenta seleccionada en la UI de Warmup con el selector global
-        selected_alias = None
-        try:
-            selected_alias = self.combo_warmup_account.get()
-        except Exception:
-            selected_alias = None
-
-        if selected_alias and selected_alias != "Sin cuentas":
-            if plat_key in self.account_selectors:
-                try:
-                    self.account_selectors[plat_key].set(selected_alias)
-                except Exception:
-                    pass
-        else:
-            self.log("⚠️ No se ha seleccionado una cuenta válida para la búsqueda de amigos.", "WARN")
-        # Verificar que la cuenta seleccionada está en la DB
-        try:
-            if selected_alias and selected_alias != "Sin cuentas":
-                d = obtener_datos_cuenta(selected_alias)
-                if not d:
-                    self.log(f"❌ La cuenta '{selected_alias}' no está registrada en la DB.", "ERROR")
-                    return
-        except Exception:
-            self.log("⚠️ Error comprobando la cuenta en la DB.", "WARN")
-
-        # Generar kwargs para la acción 'friendfinder'
-        target_func = SocialActions.find_and_add_friends
-        def kwargs_gen(alias):
-            return {"alias": alias, "limit": int(self.slider_friend_limit.get()), **{
-                "headless": self.var_headless.get(),
-                "logger": self.log,
-                "update_preview_cb": self.update_preview,
-                "use_mobile": self.var_mobile_mode.get(),
-                "use_ai": self.var_use_ai.get(),
-                "ai_model": self.ai_model_selector.get(),
-                "use_vision": self.var_use_vision.get(),
-                "control_tower": False,
-            }}
-
-        # Ejecutar en modo single o batch según corresponda
-        if self.var_batch.get():
-            threading.Thread(target=lambda: self.run_batch(target_func, plat_key, kwargs_gen)).start()
-        else:
-            threading.Thread(target=lambda: self.run_single(target_func, plat_key, kwargs_gen)).start()
-
-    def trigger_search_and_add(self):
-        """Busca personas específicas por nombre y envía solicitudes de amistad."""
-        search_term = self.search_person_entry.get().strip()
-        if not search_term:
-            self.log("⚠️ Por favor ingresa un nombre o usuario a buscar.", "WARN")
-            return
-        
-        plat_ui = self.combo_warmup_plat.get()
-        plat_key = self.plataformas.get(plat_ui, "facebook")
-
-        # Sincronizar la cuenta seleccionada en la UI de Warmup con el selector global
-        selected_alias = None
-        try:
-            selected_alias = self.combo_warmup_account.get()
-        except Exception:
-            selected_alias = None
-
-        if selected_alias and selected_alias != "Sin cuentas":
-            if plat_key in self.account_selectors:
-                try:
-                    self.account_selectors[plat_key].set(selected_alias)
-                except Exception:
-                    pass
-        else:
-            self.log("⚠️ No se ha seleccionado una cuenta válida.", "WARN")
-            return
-        
-        # Verificar que la cuenta seleccionada está en la DB
-        try:
-            if selected_alias and selected_alias != "Sin cuentas":
-                d = obtener_datos_cuenta(selected_alias)
-                if not d:
-                    self.log(f"❌ La cuenta '{selected_alias}' no está registrada en la DB.", "ERROR")
-                    return
-        except Exception:
-            self.log("⚠️ Error comprobando la cuenta en la DB.", "WARN")
-
-        # Generar kwargs para la acción 'search_and_add_friends'
-        target_func = SocialActions.search_and_add_friends
-        def kwargs_gen(alias):
-            return {
-                "alias": alias, 
-                "search_term": search_term,
-                "limit": int(self.slider_person_limit.get()), 
-                "headless": self.var_headless.get(),
-                "logger": self.log,
-                "update_preview_cb": self.update_preview,
-                "use_mobile": self.var_mobile_mode.get(),
-                "use_ai": self.var_use_ai.get(),
-                "ai_model": self.ai_model_selector.get(),
-                "use_vision": self.var_use_vision.get(),
-                "control_tower": False,
-                "platform": plat_key,
-            }
-
-        # Ejecutar en modo single o batch según corresponda
-        if self.var_batch.get():
-            threading.Thread(target=lambda: self.run_batch(target_func, plat_key, kwargs_gen)).start()
-        else:
-            threading.Thread(target=lambda: self.run_single(target_func, plat_key, kwargs_gen)).start()
-
-    def run_single(self, func, platform, kwargs_gen):
+    def run_single(self, func, platform, kwargs_gen, target_alias=None):
+        """
+        Ejecuta una tarea única.
+        Args:
+            target_alias: Si se provee, usa este alias ignorando los selectores de la pestaña.
+        """
         self.is_running = True
-        alias = self.account_selectors[platform].get()
+        
+        # 1. Determinar el alias a usar
+        if target_alias:
+            alias = target_alias
+        else:
+            # Si no hay alias forzado, buscar en el selector de la pestaña correspondiente
+            if platform in self.account_selectors:
+                alias = self.account_selectors[platform].get()
+            else:
+                alias = None
         
         if not alias or alias == "Sin cuentas":
-            self.log("❌ Error: Selecciona una cuenta válida.", "ERROR")
+            self.log(f"❌ Error: Selecciona una cuenta válida para {platform}.", "ERROR")
             self.is_running = False
             return
+
         # Asegurar que la cuenta existe en la DB
         try:
+            from login_manager import obtener_datos_cuenta
             data = obtener_datos_cuenta(alias)
             if not data:
                 self.log(f"❌ Error: La cuenta '{alias}' no existe en la base de datos.", "ERROR")
@@ -898,12 +900,24 @@ class SocialBotApp(ctk.CTk):
         if self.var_mobile_mode.get():
             mobile_device = self.mobile_manager.acquire_device_with_proxy(timeout=30.0)
             if mobile_device:
-                # Renovar IP del dispositivo
                 proxy = self.mobile_manager.renew_ip_and_get_proxy(mobile_device["device_id"])
                 if proxy:
-                    mobile_device["proxy"] = proxy
-                    # Pasar proxy móvil a la función
-                    kwargs_gen = lambda a: {**kwargs_gen(a), "mobile_proxy": f"http://{proxy}"}
+                    
+                    # 👇 --- INICIO DE CÓDIGO NUEVO PARA COMPROBAR IP --- 👇
+                    import requests
+                    try:
+                        self.log(f"🔍 Probando conexión al proxy {proxy}...", "INFO")
+                        proxies = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+                        # Consultamos la IP pasando por el celular
+                        ip_real = requests.get("https://api.ipify.org", proxies=proxies, timeout=10).text
+                        self.log(f"🌍 ÉXITO: Navegando camuflado con IP: {ip_real}", "SUCCESS")
+                    except Exception as e:
+                        self.log(f"⚠️ El proxy no responde o está mal configurado. Ignorando proxy. Error: {e}", "WARN")
+                    # 👆 --- FIN DE CÓDIGO NUEVO --- 👆
+
+                    # Modificamos el kwargs_gen para inyectar el proxy móvil
+                    original_kwargs_gen = kwargs_gen
+                    kwargs_gen = lambda a: {**original_kwargs_gen(a), "mobile_proxy": f"http://{proxy}"}
                 else:
                     self.log("⚠️ Error renovando IP, continuando sin proxy móvil", "WARN")
                     self.mobile_manager.release_device(mobile_device["device_id"])
@@ -912,16 +926,18 @@ class SocialBotApp(ctk.CTk):
                 self.log("⚠️ No se pudo adquirir dispositivo móvil, usando red de PC", "WARN")
         
         try:
-            self.log(f"Iniciando tarea única: {alias}", "INFO")
+            self.log(f"🚀 Iniciando tarea: {alias} ({platform})", "INFO")
             func(**kwargs_gen(alias))
         except Exception as e:
-            self.log(f"Error Crítico: {e}", "ERROR")
+            self.log(f"Error Crítico en ejecución: {e}", "ERROR")
         finally:
-            # Liberar dispositivo móvil si se usó
             if mobile_device:
                 self.mobile_manager.release_device(mobile_device["device_id"])
         
         self.is_running = False
+
+
+
 
     def run_batch(self, func, platform, kwargs_gen):
         self.is_running = True
@@ -985,6 +1001,46 @@ class SocialBotApp(ctk.CTk):
             if mobile_device:
                 self.mobile_manager.release_device(mobile_device["device_id"])
 
+    def toggle_ethernet_adapter(self):
+        """
+        Ejecuta comandos netsh para activar/desactivar Ethernet.
+        Requiere ejecutar el script como ADMINISTRADOR.
+        """
+        estado_deseado = self.var_ethernet_status.get()
+        interface_name = "Ethernet" # Asegúrate que este sea el nombre exacto en tu Windows
+        
+        # Si el switch está ON (True) -> Enable. Si está OFF (False) -> Disable (Tu .bat)
+        accion = "enable" if estado_deseado else "disable"
+        
+        cmd = f'netsh interface set interface "{interface_name}" admin={accion}'
+        
+        try:
+            # Ejecutamos el comando ocultando la ventana de consola negra
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            process = subprocess.run(cmd, shell=True, capture_output=True, text=True, startupinfo=startupinfo)
+            
+            if process.returncode == 0:
+                if estado_deseado:
+                    self.log("🔌 Ethernet HABILITADO. Usando red cableada.", "SUCCESS")
+                    self.switch_ethernet.configure(text="Ethernet Activo")
+                else:
+                    self.log("🚫 Ethernet DESHABILITADO. Usando Wi-Fi.", "WARN")
+                    self.switch_ethernet.configure(text="Ethernet Apagado")
+            else:
+                # Si falla (probablemente por permisos)
+                err_msg = process.stderr.strip()
+                self.log(f"❌ Error cambiando red: {err_msg}", "ERROR")
+                self.log("⚠️ ¿Ejecutaste el programa como Administrador?", "WARN")
+                
+                # Revertir el switch visualmente porque falló
+                self.var_ethernet_status.set(not estado_deseado)
+                
+        except Exception as e:
+            self.log(f"❌ Error crítico en red: {e}", "ERROR")
+            self.var_ethernet_status.set(not estado_deseado)
+
     # =========================================================================
     #                       UTILIDADES DE INTERFAZ
     # =========================================================================
@@ -1047,7 +1103,8 @@ class SocialBotApp(ctk.CTk):
                     img.thumbnail((200, 150))
                     photo = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
                     self.lbl_screenshot.configure(image=photo, text="")
-                except: pass
+                except Exception as e:
+                    print(f"⚠️ Error al cargar la vista previa: {e}")
         self.after(0, _refresh)
 
     # --- UI ESTADO DE CUENTAS ---
@@ -1061,7 +1118,7 @@ class SocialBotApp(ctk.CTk):
         header_frame.pack(fill="x", padx=20, pady=(20, 15))
         header_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(header_frame, text="📊 ESTADO DE CUENTAS", font=("Segoe UI", 18, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
+        ctk.CTkLabel(header_frame, text="📊 ESTADO DE CUENTAS", font=("Segoe UI", 18, "bold"), text_color="#050505").pack(pady=(15, 5))
         ctk.CTkLabel(header_frame, text="Visualiza qué cuentas tienen cookies cargadas", 
                     font=("Segoe UI", 10), text_color="#9ca3af").pack(pady=(0, 15))
         
@@ -1326,6 +1383,16 @@ class SocialBotApp(ctk.CTk):
                                             fg_color="#0f172a", border_color="#1e40af", border_width=1,
                                             text_color="#e5e7eb")
         self.entry_new_proxy.pack(fill="x", padx=15, pady=(0, 15))
+        # --- NUEVO: Selector de Método de Creación ---
+        method_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
+        method_frame.pack(fill="x", padx=15, pady=(0, 10))
+        
+        ctk.CTkLabel(method_frame, text="Método de Creación:", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(side="left", padx=(0, 10))
+        
+        self.var_creation_method = ctk.StringVar(value="pc_web")
+        ctk.CTkRadioButton(method_frame, text="💻 PC (Navegador)", variable=self.var_creation_method, value="pc_web", font=("Segoe UI", 11)).pack(side="left", padx=10)
+        ctk.CTkRadioButton(method_frame, text="📱 Celular Físico (Seguro)", variable=self.var_creation_method, value="mobile_app", font=("Segoe UI", 11)).pack(side="left", padx=10)
+        # ---------------------------------------------
 
         # Buttons
         btn_row = ctk.CTkFrame(form_frame, fg_color="transparent")
@@ -1352,33 +1419,220 @@ class SocialBotApp(ctk.CTk):
         ctk.CTkButton(import_frame, text="📥 Vincular Carpeta", command=self.import_local_profile, 
                      fg_color="#0284c7", hover_color="#1e40af", corner_radius=8, height=40, font=("Segoe UI", 11, "bold")).pack(fill="x", padx=15, pady=(0, 15))
 
+    # =========================================================================
+    #                       UI CREADOR MÓVIL
+    # =========================================================================
+    # =========================================================================
+    #                       UI CREADOR MÓVIL (UNA SIM A LA VEZ)
+    # =========================================================================
+    def setup_mobile_creator_ui(self):
+        f = self.tab_mobile_creator
+        f.grid_columnconfigure(0, weight=1)
+
+        # Card Principal
+        card = ctk.CTkFrame(f, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        card.pack(fill="both", expand=True, padx=20, pady=20)
+
+        ctk.CTkLabel(card, text="📱 CREADOR MÓVIL (1 SIM a la vez)", font=("Segoe UI", 20, "bold"), text_color="#60a5fa").pack(pady=(30, 10))
+        ctk.CTkLabel(card, text="Instrucciones: Inserta la SIM, espera a que tenga señal, escribe el número y dale a Iniciar.", font=("Segoe UI", 12)).pack(pady=(0, 30))
+
+        # Campo único: Teléfono
+        config_frame = ctk.CTkFrame(card, fg_color="transparent")
+        config_frame.pack(fill="x", padx=40)
+        config_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(config_frame, text="Número de Teléfono (SIM actual):", font=("Segoe UI", 14, "bold")).grid(row=0, column=0, sticky="w", pady=10, padx=10)
+        
+        self.entry_mob_phone = ctk.CTkEntry(config_frame, placeholder_text="Ej: 3001234567", height=45, font=("Segoe UI", 16, "bold"), justify="center")
+        self.entry_mob_phone.grid(row=0, column=1, padx=20, sticky="ew")
+
+        # Botón de Inicio
+        self.btn_start_mob = ctk.CTkButton(card, text="🔥 ROTAR IP Y CREAR CUENTA", 
+                                          fg_color="#10b981", hover_color="#059669",
+                                          height=60, font=("Segoe UI", 16, "bold"),
+                                          command=self.trigger_single_mobile_creation)
+        self.btn_start_mob.pack(pady=(40, 20), padx=80, fill="x")
+
+        self.mob_progress_lbl = ctk.CTkLabel(card, text="Estado: Esperando número de teléfono...", font=("Segoe UI", 13), text_color="#9ca3af")
+        self.mob_progress_lbl.pack(pady=10)
+
+    def trigger_single_mobile_creation(self):
+        """Dispara la creación de UNA cuenta tras presionar el botón"""
+        phone = self.entry_mob_phone.get().strip()
+        
+        if not phone:
+            from tkinter import messagebox
+            messagebox.showwarning("Falta Número", "Debes ingresar el número de teléfono de la SIM actual.")
+            return
+
+        threading.Thread(target=self.run_single_mobile_logic, args=(phone,), daemon=True).start()
+
+    def run_single_mobile_logic(self, phone):
+        from smart_mobile import SmartMobileRescue
+        from mobile_manager import renew_device_ip, get_connected_devices
+        from login_manager import guardar_nueva_cuenta
+        import random
+        import string
+        
+        # Intentamos usar la librería Faker si la tienes
+        try:
+            from faker import Faker
+            fake = Faker('es_MX')
+        except ImportError:
+            fake = None
+
+        devices = get_connected_devices()
+        if not devices:
+            self.log("❌ No se detectó ningún celular conectado por USB.", "ERROR")
+            self.mob_progress_lbl.configure(text="❌ Error: Celular no detectado. Revisa el cable.")
+            return
+
+        device_id = devices[0]
+        self.is_running = True
+        self.btn_start_mob.configure(state="disabled", text="⚡ PROCESANDO... NO TOCAR EL CELULAR")
+        self.mob_progress_lbl.configure(text="Estado: 🔄 1/4 - Rotando IP (Modo Avión)...")
+        
+        try:
+            # 1. ROTACIÓN DE IP (MODO AVIÓN ON/OFF)
+            self.log("🔄 Ejecutando rotación de IP (Modo Avión)...", "INFO")
+            renew_device_ip(device_id)
+
+            # 2. GENERACIÓN DE DATOS TOTALMENTE ALEATORIOS
+            if fake:
+                nombre = fake.first_name()
+                apellido = fake.last_name()
+            else:
+                nombres = ["Carlos", "Luis", "Maria", "Ana", "Jose", "Diego", "Laura"]
+                apellidos = ["Gomez", "Perez", "Ruiz", "Lopez", "Diaz", "Torres"]
+                nombre = random.choice(nombres)
+                apellido = random.choice(apellidos)
+
+            # Generar contraseña robusta aleatoria (ej: jKh8xLp2!A)
+            caracteres = string.ascii_letters + string.digits
+            pwd = ''.join(random.choice(caracteres) for _ in range(8)) + str(random.randint(10, 99)) + "!"
+            
+            # Generar Alias para la base de datos (ej: maria_ruiz_452)
+            alias = f"{nombre.lower()}_{apellido.lower()}_{random.randint(100, 999)}"
+            genero = random.choice(["Hombre", "Mujer"])
+
+            self.log(f"📋 Identidad creada: {nombre} {apellido} | Genero: {genero}", "INFO")
+            self.log(f"🔑 Credenciales -> User: {phone} | Pass: {pwd} | Alias: {alias}", "INFO")
+            
+            self.mob_progress_lbl.configure(text=f"Estado: 🤖 2/4 - Automatizando Facebook para {nombre}...")
+
+            # 3. EJECUCIÓN DEL BOT EN EL CELULAR
+            bot = SmartMobileRescue(device_id)
+            datos = {
+                "nombre": nombre,
+                "apellido": apellido,
+                "telefono": phone,
+                "password": pwd,
+                "genero": genero
+            }
+
+            exito = bot.automatizar_formulario_creacion("facebook", datos)
+            
+            # 4. GUARDADO EN BASE DE DATOS
+            if exito:
+                self.mob_progress_lbl.configure(text=f"Estado: 💾 3/4 - Guardando cuenta {alias} en Base de Datos...")
+                self.log(f"✅ Facebook creado. Guardando cuenta {alias}...", "SUCCESS")
+                
+                # Guarda en SQLite
+                guardar_nueva_cuenta(alias, phone, pwd, "Móvil (SIM)", "facebook")
+                
+                # Guarda en Excel (Si tienes importada la función)
+                try:
+                    exportar_cuenta_excel(alias, "facebook", phone, pwd, status="Creada (Móvil)")
+                except Exception:
+                    pass
+                
+                # Limpia la caja de texto y avisa que terminó
+                self.entry_mob_phone.delete(0, 'end')
+                self.mob_progress_lbl.configure(text=f"✅ ¡LISTO! Cuenta {alias} guardada. Puedes cambiar la SIM.")
+                
+                # Refresca las listas de la UI
+                self.after(500, self.refresh_all_account_selectors)
+                self.after(500, self.refresh_status_ui)
+                
+            else:
+                self.log(f"⚠️ Fallo al crear la cuenta en Facebook.", "WARN")
+                self.mob_progress_lbl.configure(text="❌ Falló la automatización. Revisa el celular.")
+
+        except Exception as e:
+            self.log(f"❌ Error crítico en creación móvil: {e}", "ERROR")
+            self.mob_progress_lbl.configure(text="❌ Error en el proceso. Revisa la consola.")
+        finally:
+            self.is_running = False
+            self.btn_start_mob.configure(state="normal", text="🔥 ROTAR IP Y CREAR CUENTA")
+
     def save_account(self):
+        # 1. Capturamos todos los datos de los campos
         alias = self.entry_new_alias.get()
+        network = self.combo_platform.get()
+        user = self.entry_new_user.get()
+        pwd = self.entry_new_pass.get()
+        proxy = self.entry_new_proxy.get()
+        
+        # 2. Capturamos qué método eligió el usuario (con un fallback de seguridad)
+        try:
+            metodo = self.var_creation_method.get()
+        except AttributeError:
+            metodo = "pc_web" # Por si aún no has pegado el código de los RadioButtons en la UI
+
         if alias:
-            if guardar_nueva_cuenta(alias, self.entry_new_user.get(), self.entry_new_pass.get(), 
-                                    self.entry_new_proxy.get(), self.combo_platform.get()):
-                messagebox.showinfo("Éxito", "Cuenta guardada correctamente")
-                # Refrescar todas las listas y selectores
+            # 3. Lógica del Celular (Se activará más tarde)
+            if metodo == "mobile_app":
+                print(f"🚀 [PRÓXIMAMENTE] Iniciando creación segura en celular para {alias}...")
+                # Aquí conectaremos a smart_mobile.py en la tarde
+            
+            # 4. Guardamos la cuenta en la base de datos de SQLite
+            if guardar_nueva_cuenta(alias, user, pwd, proxy, network):
+                
+                # ¡NUEVO! Guardamos la cuenta en el Excel
+                try:
+                    exportar_cuenta_excel(alias, network, user, pwd, status=f"Guardada ({metodo})")
+                except NameError:
+                    print("⚠️ Aviso: No se exportó a Excel porque falta importar la función arriba en main.py")
+
+                # Refrescar listas visuales
                 try:
                     self.refresh_all_account_selectors()
                 except Exception:
                     pass
                 self.on_tab_change()
-                # Limpiar campos del formulario tras guardar
-                try:
-                    self.entry_new_alias.delete(0, 'end')
-                    self.entry_new_user.delete(0, 'end')
-                    self.entry_new_pass.delete(0, 'end')
-                    self.entry_new_proxy.delete(0, 'end')
-                    try:
-                        self.combo_platform.set("facebook")
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
-            else:
-                messagebox.showerror("Error", "No se pudo guardar (Alias duplicado).")
+                
+                # Limpiar formulario
+                self.entry_new_alias.delete(0, 'end')
+                self.entry_new_user.delete(0, 'end')
+                self.entry_new_pass.delete(0, 'end')
+                self.entry_new_proxy.delete(0, 'end')
 
+                # --- LÓGICA DE AVISO Y LOGIN INMEDIATO ---
+                if metodo == "pc_web":
+                    # Tu lógica original para cuando creas en PC
+                    respuesta = messagebox.askyesno(
+                        "Cuenta Guardada", 
+                        f"La cuenta '{alias}' se guardó y exportó a Excel correctamente.\n\n"
+                        "¿Deseas INICIAR SESIÓN MANUALMENTE ahora para guardar las cookies?"
+                    )
+                    
+                    if respuesta:
+                        # Lanzamos la ventana de asistencia de login
+                        self.run_manual_login(alias)
+                else:
+                    # Aviso simple para cuando elegiste Celular Físico
+                    messagebox.showinfo(
+                        "Cuenta Guardada", 
+                        f"La cuenta '{alias}' se guardó y exportó a Excel correctamente.\n\n"
+                        "Método seleccionado: 📱 Celular Físico."
+                    )
+            else:
+                messagebox.showerror("Error", "No se pudo guardar (Posible Alias duplicado).")
+        else:
+            messagebox.showwarning("Faltan datos", "El campo Alias es obligatorio.")
+
+
+    
     def get_profiles_list(self):
         if not os.path.exists("profiles"): return ["No hay carpetas"]
         dirs = [d for d in os.listdir("profiles") if os.path.isdir(os.path.join("profiles", d))]
@@ -1613,35 +1867,226 @@ class SocialBotApp(ctk.CTk):
 
     # --- IMPLEMENTACIÓN DE LOGIN MANUAL ---
     def run_manual_login(self, alias=None):
-        if not alias:
-            try:
-                tab = self.tabs.get()
-                key_map = {k: v for k, v in self.plataformas.items()}
-                if tab in key_map:
-                    plat = key_map[tab]
-                    alias = self.account_selectors[plat].get()
-            except: pass
-        
-        if not alias or alias == "Sin cuentas":
-            messagebox.showwarning("Aviso", "Selecciona una cuenta de la lista primero.")
-            return
+            # 1. Obtener el alias si no viene por parámetro
+            if not alias:
+                try:
+                    tab = self.tabs.get()
+                    key_map = {k: v for k, v in self.plataformas.items()}
+                    if tab in key_map:
+                        plat = key_map[tab]
+                        alias = self.account_selectors[plat].get()
+                except: pass
+            
+            if not alias or alias == "Sin cuentas":
+                messagebox.showwarning("Aviso", "Selecciona una cuenta de la lista primero.")
+                return
 
-        def _manual_login_thread():
-            self.log(f"🔵 Iniciando Login Manual para: {alias}...", "INFO")
+            # 2. Obtener datos de la cuenta
             data = obtener_datos_cuenta(alias)
-            with sync_playwright() as p:
-                from browser_handler import get_browser_context
-                # HEADLESS = FALSE obligatorio para ver la ventana
-                context = get_browser_context(p, alias, headless=False, log_callback=self.log)
-                
-                # Llamar al asistente de login manager
-                if login_manual_asistido(context, alias, data):
-                    self.log(f"✅ Login Manual COMPLETADO: {alias}", "SUCCESS")
+            if not data:
+                messagebox.showerror("Error", "No se encontraron datos de la cuenta.")
+                return
+
+            # 3. Crear VENTANA FLOTANTE DE ASISTENCIA (Helper)
+            helper = ctk.CTkToplevel(self)
+            helper.title(f"Login: {alias}")
+            helper.geometry("350x450")
+            helper.attributes("-topmost", True) # Mantener siempre visible encima del navegador
+            helper.resizable(False, False)
+
+            # Contenedor principal
+            frame = ctk.CTkFrame(helper, corner_radius=10)
+            frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+            ctk.CTkLabel(frame, text=f"🔐 ASISTENTE DE LOGIN", font=("Segoe UI", 16, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
+            ctk.CTkLabel(frame, text=f"Cuenta: {alias}", font=("Segoe UI", 12)).pack(pady=(0, 10))
+            
+            # --- Función para copiar al portapapeles ---
+            def copy_to_clipboard(text):
+                self.clipboard_clear()
+                self.clipboard_append(text)
+                self.update() # Necesario para que el portapapeles se actualice
+                messagebox.showinfo("Copiado", "Texto copiado al portapapeles", parent=helper)
+
+            # Mostrar Usuario
+            ctk.CTkLabel(frame, text="Usuario / Email:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
+            user_frame = ctk.CTkFrame(frame, fg_color="transparent")
+            user_frame.pack(fill="x", padx=20, pady=(0, 10))
+            
+            ent_user = ctk.CTkEntry(user_frame, width=220)
+            ent_user.pack(side="left", padx=(0, 5))
+            ent_user.insert(0, data.get("username", ""))
+            
+            ctk.CTkButton(user_frame, text="📋", width=30, fg_color="#475569", 
+                        command=lambda: copy_to_clipboard(data.get("username", ""))).pack(side="left")
+
+            # Mostrar Contraseña
+            ctk.CTkLabel(frame, text="Contraseña:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
+            pass_frame = ctk.CTkFrame(frame, fg_color="transparent")
+            pass_frame.pack(fill="x", padx=20, pady=(0, 15))
+            
+            ent_pass = ctk.CTkEntry(pass_frame, width=220) # No ponemos show="*" para que puedas verla si quieres
+            ent_pass.pack(side="left", padx=(0, 5))
+            ent_pass.insert(0, data.get("password", ""))
+            
+            ctk.CTkButton(pass_frame, text="📋", width=30, fg_color="#475569", 
+                        command=lambda: copy_to_clipboard(data.get("password", ""))).pack(side="left")
+
+            # Instrucciones
+            instrucciones = (
+                "1. El navegador se abrirá automáticamente.\n"
+                "2. Copia y pega los datos de arriba.\n"
+                "3. Inicia sesión y asegúrate de entrar al Home.\n"
+                "4. Presiona 'GUARDAR SESIÓN' abajo."
+            )
+            ctk.CTkLabel(frame, text=instrucciones, justify="left", font=("Segoe UI", 10), text_color="#9ca3af").pack(padx=20, pady=10)
+
+            # Variables para controlar el hilo del navegador
+            browser_state = {"context": None, "page": None, "playwright": None, "running": True}
+
+            # --- Función para guardar y cerrar ---
+            def save_and_close():
+                if browser_state["context"]:
+                    try:
+                        # Capturar cookies
+                        cookies = browser_state["context"].cookies()
+                        
+                        # Guardar en DB
+                        from login_manager import guardar_cookies_db
+                        guardar_cookies_db(alias, cookies, strict=False, platform_hint=data.get("platform"))
+                        
+                        # Guardar en JSON (Respaldo local)
+                        import json
+                        with open(f"{alias}.json", "w", encoding="utf-8") as f:
+                            json.dump(cookies, f, indent=4)
+                        
+                        messagebox.showinfo("Éxito", "✅ Cookies guardadas y perfil actualizado.", parent=helper)
+                        self.log(f"✅ Login Manual COMPLETADO para: {alias}", "SUCCESS")
+                    except Exception as e:
+                        self.log(f"Error guardando cookies: {e}", "ERROR")
+                        messagebox.showerror("Error", f"No se pudieron guardar las cookies: {e}", parent=helper)
+                    
+                    # Cerrar navegador
+                    try:
+                        browser_state["context"].close()
+                        browser_state["playwright"].stop()
+                    except: pass
+                    
+                    browser_state["running"] = False
+                    helper.destroy()
+                    
+                    # Actualizar estado UI
+                    if hasattr(self, 'refresh_status_ui'):
+                        self.refresh_status_ui()
                 else:
-                    self.log(f"❌ Login Manual Cancelado: {alias}", "ERROR")
-                context.close()
+                    messagebox.showwarning("Espera", "El navegador aún no está listo.", parent=helper)
+
+            # Botón de Guardar
+            btn_save = ctk.CTkButton(frame, text="💾 GUARDAR SESIÓN Y SALIR", command=save_and_close,
+                                    fg_color="#10b981", hover_color="#059669", height=45, font=("Segoe UI", 12, "bold"))
+            btn_save.pack(fill="x", padx=20, pady=(10, 20))
+
+            # --- Hilo del Navegador ---
+            def _browser_thread():
+                self.log(f"🔵 Abriendo navegador para: {alias}...", "INFO")
+                try:
+                    from playwright.sync_api import sync_playwright
+                    from browser_handler import get_browser_context
+                    
+                    p = sync_playwright().start()
+                    browser_state["playwright"] = p
+                    
+                    # IMPORTANTE: headless=False para que puedas ver la ventana
+                    context = get_browser_context(p, alias, headless=False, log_callback=self.log)
+                    browser_state["context"] = context
+                    
+                    page = context.new_page()
+                    
+                    # Navegar a la plataforma
+                    urls = {
+                        "facebook": "https://www.facebook.com/",
+                        "instagram": "https://www.instagram.com/",
+                        "tiktok": "https://www.tiktok.com/login",
+                        "youtube": "https://accounts.google.com/",
+                        "twitter": "https://twitter.com/login"
+                    }
+                    plat = data.get("platform", "facebook").lower()
+                    url = urls.get(plat, "https://www.facebook.com/")
+                    
+                    try:
+                        page.goto(url)
+                    except: pass
+
+                    # Bucle infinito para mantener el navegador abierto hasta que el usuario guarde
+                    while browser_state["running"]:
+                        time.sleep(1)
+                        # Verificar si el navegador se cerró manualmente
+                        try:
+                            if page.is_closed():
+                                break
+                        except:
+                            break
+                    
+                    # Limpieza si se cierra el bucle
+                    if browser_state["running"]:
+                        context.close()
+                        p.stop()
+                        
+                except Exception as e:
+                    self.log(f"❌ Error en navegador manual: {e}", "ERROR")
+
+            # Iniciar el hilo del navegador
+            threading.Thread(target=_browser_thread, daemon=True).start()
+
+            # Protocolo al cerrar la ventana flotante (helper)
+            def on_helper_close():
+                if messagebox.askyesno("Cerrar", "¿Seguro que quieres cerrar sin guardar las cookies?", parent=helper):
+                    browser_state["running"] = False
+                    helper.destroy()
+            
+            helper.protocol("WM_DELETE_WINDOW", on_helper_close)
+
+
+    def run_mobile_creation_flow(self, alias, network, user, pwd, proxy):
+        from smart_mobile import SmartMobileRescue
+        from login_manager import guardar_nueva_cuenta
         
-        threading.Thread(target=_manual_login_thread).start()
+        self.log(f"📱 Iniciando creación en celular para {alias}...", "INFO")
+        
+        try:
+            bot_movil = SmartMobileRescue() 
+            
+            datos = {
+                "nombre": alias.split('_')[0], 
+                "apellido": "Bot", 
+                "telefono": user, # Tu número celular
+                "password": pwd,
+                "genero": "Hombre" # O aleatorio: random.choice(["Hombre", "Mujer"])
+            }
+            
+            # Ejecuta la rutina del celular
+            exito = bot_movil.automatizar_formulario_creacion(network, datos)
+            
+            if exito:
+                self.log("✅ Flujo móvil terminado. Guardando en Base de Datos...", "SUCCESS")
+                
+                # ¡AQUÍ ESTÁ LA MAGIA DEL SQL! 
+                # Llama a tu función de login_manager.py que hace el INSERT en SQLite
+                if guardar_nueva_cuenta(alias, user, pwd, proxy, network):
+                    self.log(f"💾 ¡Cuenta {alias} guardada en SQLite exitosamente!", "SUCCESS")
+                    
+                    # Refrescar la UI para que aparezca en el panel de inmediato
+                    self.after(500, self.refresh_all_account_selectors)
+                    self.after(500, self.refresh_status_ui)
+                else:
+                    self.log(f"⚠️ La cuenta se creó en el móvil, pero hubo un error guardándola en la DB (¿Alias duplicado?)", "WARN")
+            else:
+                self.log("❌ El flujo móvil falló o se interrumpió.", "ERROR")
+                
+        except Exception as e:
+            self.log(f"❌ Error crítico en flujo móvil: {e}", "ERROR")
+
+
 
 if __name__ == "__main__":
     if not os.path.exists("logs"): os.makedirs("logs")

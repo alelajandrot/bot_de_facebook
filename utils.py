@@ -1,12 +1,39 @@
 import time
 import random
-import os
 import math
 from PIL import Image
+import pandas as pd
+from datetime import datetime
+import os
 
-def human_sleep(a=2, b=5):
-    """Espera un tiempo aleatorio entre a y b segundos"""
-    time.sleep(random.uniform(a, b))
+def human_sleep(min_time=2, max_time=5):
+    """
+    Espera un tiempo emulando el comportamiento humano real usando una Distribución Normal.
+    La mayoría de las pausas ocurren cerca del promedio, con ocasionales 'distracciones'.
+    """
+    # 1. Calculamos la media (el pico de la campana)
+    mu = (min_time + max_time) / 2.0
+    
+    # 2. Calculamos la desviación estándar
+    # Dividir entre 6 asegura que el ~99.7% de los casos caigan dentro de tu rango original
+    sigma = (max_time - min_time) / 6.0
+    
+    # 3. Generamos el tiempo usando la campana de Gauss
+    sleep_time = random.gauss(mu, sigma)
+    
+    # 4. Control de límites (evitar tiempos negativos o matemáticamente absurdos)
+    # Permitimos que sea un poco más rápido o un poco más lento que los límites originales
+    sleep_time = max(min_time * 0.7, min(sleep_time, max_time * 1.3))
+    
+    # 5. Simulación de "Micro-distracciones" humanas
+    # Hay un 5% de probabilidad de que el "usuario" se distraiga leyendo un mensaje, tomando agua, etc.
+    if random.random() < 0.05:
+        distraction = random.uniform(2.5, 7.5)
+        # Opcional: imprimir en consola si quieres ver cuándo se distrae tu bot
+        # print(f"☕ [Comportamiento Humano] Distracción simulada... añadiendo {distraction:.1f}s")
+        sleep_time += distraction
+
+    time.sleep(sleep_time)
 
 def _cubic_bezier(p0, p1, p2, p3, t):
     """Evalúa punto en curva cúbica de Bézier para parámetro t en [0,1]."""
@@ -74,16 +101,17 @@ def simulate_human_behavior(page):
                 # Algunos contextos pueden requerir pasos; intentamos con steps=1
                 try:
                     page.mouse.move(int(jitter_x), int(jitter_y), steps=1)
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"⚠️ Error al mover el mouse a {jitter_x},{jitter_y}: {e}")
 
             # Pausa que simula velocidad variable (más lenta al inicio/fin)
             time.sleep(base_delay * (0.5 + random.random()))
 
         # Pequeña pausa final
         time.sleep(random.uniform(0.05, 0.25))
-    except Exception:
-        pass
+    except Exception as e:
+        # Este es el error global por si Playwright falla de forma general, no usamos jitter_x/y aquí.
+        print(f"⚠️ Error general simulando comportamiento humano: {e}")
 
 def save_screenshot_log(page, alias, action_name):
     """Guarda captura y retorna la ruta para la UI"""
@@ -95,4 +123,39 @@ def save_screenshot_log(page, alias, action_name):
         # Guardamos una copia fija para la vista previa inmediata en la UI
         page.screenshot(path="logs/preview_last.png") 
         return path
-    except: return None
+    except Exception as e:
+        print(f"⚠️ Error al guardar captura de pantalla ({action_name}): {e}")
+        return None
+
+def exportar_cuenta_excel(alias, network, username, password, status="Creada"):
+    """Guarda los datos de una cuenta nueva en un archivo Excel para llevar el control."""
+    archivo = "cuentas_creadas.xlsx"
+    fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Creamos la fila con los datos
+    nueva_fila = pd.DataFrame([{
+        "Alias": alias,
+        "Red Social": network.capitalize(),
+        "Usuario/Email": username,
+        "Contraseña": password,
+        "Estado": status,
+        "Fecha de Creación": fecha
+    }])
+    
+    try:
+        # Si el archivo ya existe, lo abrimos y le agregamos la fila al final
+        if os.path.exists(archivo):
+            df = pd.read_excel(archivo)
+            # Evitar usar append (está deprecado en pandas nuevos), usamos concat
+            df = pd.concat([df, nueva_fila], ignore_index=True)
+        else:
+            # Si no existe, creamos el documento desde cero
+            df = nueva_fila
+        
+        # Guardamos el archivo sin la columna de índices
+        df.to_excel(archivo, index=False)
+        print(f"📊 Cuenta '{alias}' exportada a Excel exitosamente.")
+        return True
+    except Exception as e:
+        print(f"⚠️ Error exportando a Excel: {e}")
+        return False

@@ -1,0 +1,6 @@
+1. pagar 2 planes a dos sims.
+2. conectar los dos celulares a al pc y probar los comandos por cable usb, activar modo desarrollador.
+3. revisar si es ves de sims es mejor comprar a https://smspva.com/es/service/facebook numeros temporales y crear cuentas, las cuales recibirian el texto por api.
+4. hacer que las cuentas puedan subir foto de perfil random en su perfil, con imagenes que tenagmos en carpeta.
+5. hacer que al crear el primer login manual se conecte al celular coja su ip y haga el proceso
+6. hacer la configuracion de un celular como  modem y el otro hace lo de la creacion de cuentas, y que las que creen exitosas se vayan guardando en la base de datos.

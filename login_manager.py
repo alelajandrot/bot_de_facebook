@@ -54,6 +54,20 @@ def init_db():
                     user_agent TEXT,
                     last_used TEXT
                 )''')
+
+
+# MIGRACIÓN SEGURA: Añadir columnas de huella digital si no existen
+    try:
+        c.execute("ALTER TABLE cuentas ADD COLUMN viewport TEXT")
+    except sqlite3.OperationalError:
+        pass # La columna ya existe
+        
+    try:
+        c.execute("ALTER TABLE cuentas ADD COLUMN timezone TEXT")
+    except sqlite3.OperationalError:
+        pass # La columna ya existe
+    
+
     conn.commit()
     conn.close()
     
@@ -61,6 +75,20 @@ def init_db():
     rescatar_cookies_antiguas()
     limpiar_duplicados_json()
     sincronizar_perfiles_locales()
+
+# Añade esta NUEVA FUNCIÓN en cualquier parte de login_manager.py
+def guardar_huella_digital(alias, user_agent, viewport, timezone):
+    """Guarda la huella digital generada para mantenerla estática en el futuro."""
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    try:
+        c.execute("UPDATE cuentas SET user_agent = ?, viewport = ?, timezone = ? WHERE alias = ?",
+                  (user_agent, viewport, timezone, alias))
+        conn.commit()
+    except Exception as e:
+        print(f"⚠️ Error guardando huella digital en DB: {e}")
+    finally:
+        conn.close()
 
 def migrar_credenciales_json():
     if os.path.exists("cuentas.json"):
@@ -333,8 +361,8 @@ def manejar_login(context, alias, headless_mode=False):
 
 
 
+# CÓDIGO CORREGIDO (Profesional)
 def intentar_login_facebook(page, context, alias, data, headless_mode):
-    """Lógica específica de login para Facebook (Legacy)"""
     user = data.get("username")
     pwd = data.get("password")
     
@@ -342,7 +370,7 @@ def intentar_login_facebook(page, context, alias, data, headless_mode):
 
     try:
         campo_user = page.locator('#email, input[name="email"]').first
-        if campo_user.is_visible():
+        if campo_user.is_visible(timeout=5000): # Siempre usa timeouts explícitos
             campo_user.fill(user)
             page.wait_for_timeout(1000)
             page.locator('#pass, input[name="pass"]').first.fill(pwd)
@@ -350,12 +378,20 @@ def intentar_login_facebook(page, context, alias, data, headless_mode):
             page.locator('#loginbutton, button[name="login"], button[type="submit"]').first.click()
             page.wait_for_timeout(5000)
             
-            if "checkpoint" in page.url: return None
+            if "checkpoint" in page.url: 
+                print(f"⚠️ [WARN] Checkpoint detectado para {alias}")
+                return None
             
+            from login_manager import verificar_si_logueado # Asegúrate de importarlo
             if verificar_si_logueado(page, "facebook"):
+                from login_manager import guardar_cookies_db
                 guardar_cookies_db(alias, context.cookies())
                 return page
-    except: pass
+    except Exception as e:
+        # AQUÍ ESTÁ LA MAGIA: Registras exactamente qué falló
+        print(f"⚠️ [WARN] Error en login automático de FB para {alias}: {str(e)[:150]}")
+        # Si estuvieras dentro de bot_logic.py, usarías: logger(f"Error: {e}", "WARN")
+        
     return None
 
 def intentar_login_instagram(page, context, alias, data, headless_mode=False):

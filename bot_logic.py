@@ -968,6 +968,119 @@ class SocialActions:
                 logger(f"❌ Error: {str(e)[:100]}", "ERROR")
             finally:
                 context.close()
+    
+    @staticmethod
+    def fb_create_post(alias, text, image_path, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
+        from playwright.sync_api import sync_playwright
+        from browser_handler import get_browser_context
+        from login_manager import manejar_login
+        from utils import human_sleep, save_screenshot_log
+        import os
+
+        if not os.path.exists(image_path):
+            logger(f"❌ FB Post: La imagen no existe en la ruta {image_path}", "ERROR")
+            return
+
+        with sync_playwright() as p:
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                
+                if page:
+                    logger(f"📝 Iniciando creación de publicación con imagen para {alias}...", "INFO")
+                    page.goto("https://www.facebook.com/", timeout=60000)
+                    human_sleep(3, 5)
+
+                    # 1. Abrir la caja de "¿Qué estás pensando?"
+                    crear_post_btn = page.locator('div[role="button"]:has-text("¿Qué estás pensando?"), div[role="button"]:has-text("What\'s on your mind")').first
+                    crear_post_btn.click()
+                    human_sleep(2, 4)
+
+                    # 2. Escribir el texto
+                    caja_texto = page.locator('div[role="textbox"][contenteditable="true"]').first
+                    caja_texto.fill(text)
+                    human_sleep(1, 2)
+
+                    # 3. Interceptar la subida de archivo y hacer clic en el ícono de Foto/Video
+                    with page.expect_file_chooser() as fc_info:
+                        page.locator('div[aria-label="Foto/video"], div[aria-label="Photo/video"]').first.click()
+                    
+                    # Subir el archivo
+                    file_chooser = fc_info.value
+                    file_chooser.set_files(image_path)
+                    logger("🖼️ Imagen cargada en el navegador...", "INFO")
+                    human_sleep(4, 7) # Esperar a que la previsualización cargue
+
+                    # 4. Publicar
+                    btn_publicar = page.locator('div[aria-label="Publicar"], div[aria-label="Post"]').first
+                    btn_publicar.click()
+                    
+                    logger("✅ Publicación enviada. Esperando confirmación...", "SUCCESS")
+                    human_sleep(8, 12) # Espera crucial para que FB procese la subida
+
+                    save_screenshot_log(page, alias, "fb_post_image")
+                    update_preview_cb()
+
+            except Exception as e:
+                logger(f"Error FB Create Post ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
+
+
+    @staticmethod
+    def fb_update_profile_picture(alias, image_path, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
+        from playwright.sync_api import sync_playwright
+        from browser_handler import get_browser_context
+        from login_manager import manejar_login
+        from utils import human_sleep, save_screenshot_log
+        import os
+
+        if not os.path.exists(image_path):
+            logger(f"❌ FB Perfil: La imagen no existe {image_path}", "ERROR")
+            return
+
+        with sync_playwright() as p:
+            try:
+                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
+                page = manejar_login(context, alias, headless)
+                
+                if page:
+                    logger(f"👤 Actualizando foto de perfil para {alias}...", "INFO")
+                    
+                    # 1. Navegar al perfil (haciendo clic en la foto de la barra superior o yendo a /me)
+                    page.goto("https://www.facebook.com/me", timeout=60000)
+                    human_sleep(4, 6)
+
+                    # 2. Hacer clic en la foto de perfil actual para cambiarla
+                    btn_camara = page.locator('div[aria-label="Actualizar foto de perfil"], div[aria-label="Update profile picture"]').first
+                    btn_camara.click()
+                    human_sleep(2, 3)
+
+                    # 3. Interceptar selector de archivos para "Subir foto"
+                    with page.expect_file_chooser() as fc_info:
+                        page.locator('div[role="button"]:has-text("Subir foto"), div[role="button"]:has-text("Upload photo")').first.click()
+                    
+                    file_chooser = fc_info.value
+                    file_chooser.set_files(image_path)
+                    logger("🖼️ Imagen subida, configurando recorte...", "INFO")
+                    human_sleep(5, 8)
+
+                    # 4. Guardar
+                    btn_guardar = page.locator('div[aria-label="Guardar"], div[aria-label="Save"]').first
+                    btn_guardar.click()
+                    
+                    logger("✅ Foto de perfil actualizada con éxito.", "SUCCESS")
+                    human_sleep(5, 8) 
+
+                    save_screenshot_log(page, alias, "fb_profile_pic")
+                    update_preview_cb()
+
+            except Exception as e:
+                logger(f"Error FB Profile Pic ({alias}): {e}", "ERROR")
+            finally:
+                try: context.close()
+                except: pass
             
 
             

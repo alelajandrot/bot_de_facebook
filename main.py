@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tkinter import messagebox
 from PIL import Image
 import subprocess  # <--- AGREGAR ESTO AL INICIO CON LOS OTROS IMPORTS
+from tkinter import messagebox, filedialog # <--- Añadir filedialog aquí
 
 # --- ESTA ES LA LÍNEA QUE FALTABA ---
 from playwright.sync_api import sync_playwright 
@@ -155,20 +156,23 @@ class SocialBotApp(ctk.CTk):
             ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
 
             # --- VISTA PREVIA (TAMAÑO REDUCIDO) ---
+# --- VISTA PREVIA (TAMAÑO FIJO PARA EVITAR COLAPSO) ---
             preview_frame = ctk.CTkFrame(self.sidebar, fg_color="#1e3a5f", corner_radius=12)
-            # expand=False es clave para que no empuje todo hacia arriba
-            preview_frame.pack(side="bottom", fill="x", padx=12, pady=15, expand=False)
+            # Quitamos el side="bottom" para que se apile naturalmente y no se esconda
+            preview_frame.pack(fill="x", padx=12, pady=15) 
             
             preview_header = ctk.CTkLabel(preview_frame, text="📸 Última Actividad", 
                                         font=("Segoe UI", 11, "bold"), text_color="#60a5fa")
             preview_header.pack(anchor="w", padx=12, pady=(8, 4))
             
-            # Altura reducida a 100px (antes 140) para que quepa el switch
-            self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Sin imagen]", 
+            # Forzamos un tamaño fijo con height_request o empacado expansivo
+            self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Esperando captura...]", 
                                             fg_color="#0f172a", corner_radius=10,
                                             font=("Segoe UI", 9), text_color="#9ca3af",
-                                            width=280, height=100)
-            self.lbl_screenshot.pack(padx=12, pady=(0, 12), fill="both")
+                                            width=260, height=100) # Tamaño fijo
+            # Añadimos expand=True para que defienda su espacio
+            self.lbl_screenshot.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+
 
     # =========================================================================
     #                       SISTEMA DE PESTAÑAS (TABS)
@@ -274,6 +278,16 @@ class SocialBotApp(ctk.CTk):
                         selector.set(nuevas_cuentas[0])
         except Exception: pass
     
+    def browse_fb_image(self):
+        filename = filedialog.askopenfilename(
+            title="Seleccionar Imagen",
+            filetypes=(("Archivos de imagen", "*.jpg *.jpeg *.png"), ("Todos los archivos", "*.*"))
+        )
+        if filename:
+            self.fb_img_path_entry.delete(0, "end")
+            self.fb_img_path_entry.insert(0, filename)
+            self.log(f"📸 Imagen seleccionada: {filename.split('/')[-1]}", "INFO")
+        
     def on_mobile_mode_toggle(self):
         """Callback cuando se activa/desactiva el modo móvil"""
         if self.var_mobile_mode.get():
@@ -357,6 +371,32 @@ class SocialBotApp(ctk.CTk):
         ctk.CTkButton(comment_frame, text="💬 Comentar", fg_color="#1877F2", hover_color="#0d47a1",
                      font=("Segoe UI", 12, "bold"), height=40, corner_radius=8,
                      command=lambda: self.start_execution("fb_comment", "facebook")).pack(pady=(10, 15), padx=15, fill="x")
+    
+        multi_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        multi_frame.grid(row=1, column=2, sticky="nsew", padx=10, pady=5) # Columna 2, Fila 1
+        
+        ctk.CTkLabel(multi_frame, text="📸 Multimedia", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
+        
+        # Campo para la ruta de la imagen
+        path_container = ctk.CTkFrame(multi_frame, fg_color="transparent")
+        path_container.pack(fill="x", padx=15, pady=5)
+        
+        self.fb_img_path_entry = ctk.CTkEntry(path_container, placeholder_text="Ruta de imagen...", 
+                                            font=("Segoe UI", 10), height=30, fg_color="#0f172a")
+        self.fb_img_path_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        
+        ctk.CTkButton(path_container, text="📁", width=30, height=30, fg_color="#475569", 
+                    command=self.browse_fb_image).pack(side="right")
+
+        # Botón: Publicar con Imagen
+        ctk.CTkButton(multi_frame, text="📝 Publicar Foto", fg_color="#059669", hover_color="#047857",
+                    font=("Segoe UI", 11, "bold"), height=35, corner_radius=8,
+                    command=lambda: self.start_execution("fb_post_img", "facebook")).pack(pady=(10, 5), padx=15, fill="x")
+
+        # Botón: Cambiar Foto de Perfil
+        ctk.CTkButton(multi_frame, text="👤 Cambiar Perfil", fg_color="#7c3aed", hover_color="#6d28d9",
+                    font=("Segoe UI", 11, "bold"), height=35, corner_radius=8,
+                    command=lambda: self.start_execution("fb_update_avatar", "facebook")).pack(pady=(5, 15), padx=15, fill="x")     
 
     def ui_instagram(self, parent):
         parent.grid_columnconfigure((0, 1), weight=1)
@@ -854,10 +894,30 @@ class SocialBotApp(ctk.CTk):
             target_func = SocialActions.x_reply
             kwargs_gen = lambda alias: {"alias": alias, "url": params['url'], "comments": params['comments'], **common_args}
 
+        elif action_type == "fb_post_img":
+            # Capturamos la ruta de forma segura
+            img_path = self.fb_img_path_entry.get() if hasattr(self, 'fb_img_path_entry') else ""
+            target_func = SocialActions.fb_create_post
+            
+            # Usamos el primer comentario de la lista como pie de foto (caption)
+            caption = [line.strip() for line in self.fb_comment_txt.get("1.0", "end-1c").split('\n') if line.strip()]
+            text = caption[0] if caption else "Publicación automática"
+            
+            kwargs_gen = lambda alias: {"alias": alias, "text": text, "image_path": img_path, **common_args}
+
+        elif action_type == "fb_update_avatar":
+            # Capturamos la ruta de forma segura
+            img_path = self.fb_img_path_entry.get() if hasattr(self, 'fb_img_path_entry') else ""
+            target_func = SocialActions.fb_update_profile_picture
+            
+            kwargs_gen = lambda alias: {"alias": alias, "image_path": img_path, **common_args}
+        # 👆 HASTA AQUÍ LLEGAN LOS NUEVOS CASOS 👆
         if self.var_batch.get():
             threading.Thread(target=lambda: self.run_batch(target_func, platform, kwargs_gen)).start()
         else:
             threading.Thread(target=lambda: self.run_single(target_func, platform, kwargs_gen)).start()
+        
+
 
     def run_single(self, func, platform, kwargs_gen, target_alias=None):
         """
@@ -1078,7 +1138,7 @@ class SocialBotApp(ctk.CTk):
         
         color = color_map.get(type, "#e5e7eb")
         
-        def _update():
+    def _update():
             self.console.configure(state="normal")
             # Insertar timestamp en gris
             self.console.insert("end", f"[{ts}] ", ())
@@ -1092,20 +1152,31 @@ class SocialBotApp(ctk.CTk):
             self.console.configure(state="disabled")
             print(text.strip())
         
-        self.after(0, _update)
+            self.after(0, _update)
+
 
     def update_preview(self):
-        path = "logs/preview_last.png"
-        def _refresh():
-            if os.path.exists(path):
-                try:
-                    img = Image.open(path)
-                    img.thumbnail((200, 150))
-                    photo = ctk.CTkImage(light_image=img, dark_image=img, size=img.size)
-                    self.lbl_screenshot.configure(image=photo, text="")
-                except Exception as e:
-                    print(f"⚠️ Error al cargar la vista previa: {e}")
-        self.after(0, _refresh)
+            path = "logs/preview_last.png"
+            def _refresh():
+                if os.path.exists(path):
+                    try:
+                        from PIL import Image
+                        # 1. Abrimos la imagen
+                        img = Image.open(path)
+                        
+                        # 2. Le damos el tamaño exacto de la caja
+                        photo = ctk.CTkImage(light_image=img, dark_image=img, size=(260, 100))
+                        
+                        # 3. Aplicamos la imagen y borramos el texto
+                        self.lbl_screenshot.configure(image=photo, text="")
+                        
+                        # 4. TRUCO DE ORO: Evita que Python borre la imagen de la memoria RAM
+                        self.lbl_screenshot.image = photo 
+                        
+                    except Exception as e:
+                        self.log(f"⚠️ Error cargando imagen: {e}", "WARN")
+            
+            self.after(500, _refresh)
 
     # --- UI ESTADO DE CUENTAS ---
     def setup_status_ui(self):

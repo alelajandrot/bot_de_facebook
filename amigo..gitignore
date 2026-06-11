@@ -1,0 +1,15 @@
+# Entornos virtuales y caché
+env/
+__pycache__/
+
+# Archivos de la base de datos y perfiles (¡CRÍTICO!)
+cuentas.db
+profiles/
+logs/
+*.json
+
+# Archivos compilados
+dist/
+build/
+protegido/
+*.spec

@@ -6,10 +6,6 @@ venv/
 __pycache__/
 *.pyc
 
-# Perfiles de navegador
-profiles/
-dist/
-dist/profiles copy/
 
 # Cache y datos temporales
 *.log
@@ -19,3 +15,13 @@ dist/profiles copy/
 # Archivos del sistema
 .DS_Store
 Thumbs.db
+
+# Excluir temporales y cachés pesados de Chromium
+profiles/**/BrowserMetrics/
+profiles/**/Crashpad/
+profiles/**/Cache/
+profiles/**/Code Cache/
+profiles/**/GPUPersistentCache/
+profiles/**/GraphiteDawnCache/
+profiles/**/GrShaderCache/
+profiles/**/ShaderCache/

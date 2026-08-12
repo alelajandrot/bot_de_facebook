@@ -1,0 +1,17 @@
+2026/08/12-09:52:31.079 48ec Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\Camilo Herrera\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/12-09:52:31.086 48ec Recovering log #54
+2026/08/12-09:52:31.087 48ec Level-0 table #56: started
+2026/08/12-09:52:31.093 48ec Level-0 table #56: 16246 bytes OK
+2026/08/12-09:52:31.094 48ec Recovering log #56
+2026/08/12-09:52:31.096 48ec Reusing old log C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\Camilo Herrera\Default\Local Storage\leveldb/000056.log 
+2026/08/12-09:52:31.099 48ec Delete type=0 #54
+2026/08/12-09:52:31.099 48ec Delete type=2 #57
+2026/08/12-09:52:31.101 3b64 Compacting 4@0 + 1@1 files
+2026/08/12-09:52:31.111 3b64 Generated table #57@0: 72 keys, 21480 bytes
+2026/08/12-09:52:31.112 3b64 Compacted 4@0 + 1@1 files => 21480 bytes
+2026/08/12-09:52:31.114 3b64 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/08/12-09:52:31.115 3b64 Delete type=2 #47
+2026/08/12-09:52:31.115 3b64 Delete type=2 #49
+2026/08/12-09:52:31.115 3b64 Delete type=2 #51
+2026/08/12-09:52:31.115 3b64 Delete type=2 #54
+2026/08/12-09:52:31.116 3b64 Delete type=2 #56

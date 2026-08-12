@@ -1,0 +1,8 @@
+2026/08/12-10:04:52.511 4670 Reusing MANIFEST C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\Nicolas pardo\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/12-10:04:52.535 4670 Recovering log #3
+2026/08/12-10:04:52.536 4670 Level-0 table #3: started
+2026/08/12-10:04:52.541 4670 Level-0 table #3: 27608 bytes OK
+2026/08/12-10:04:52.553 4670 Recovering log #4
+2026/08/12-10:04:52.554 4670 Reusing old log C:\Users\alejandro_terranova\Desktop\cosas_mias\proyecto_publicaciones\facebook_bot\profiles\Nicolas pardo\Default\Local Storage\leveldb/000004.log 
+2026/08/12-10:04:52.557 4670 Delete type=0 #3
+2026/08/12-10:04:52.557 4670 Delete type=2 #5

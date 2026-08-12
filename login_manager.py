@@ -264,15 +264,14 @@ def obtener_lista_alias():
 
 def manejar_login(context, alias, headless_mode=False):
     """
-    Versión optimizada: Prioriza archivos JSON físicos y maneja 
-    tiempos de espera para evitar bloqueos en cuentas antiguas.
+    Versión equilibrada: Carga rápida pero esperando a que la página se dibuje correctamente.
     """
     print(f"--- Login Manager: Procesando {alias} ---")
     
+    from login_manager import obtener_datos_cuenta
     data = obtener_datos_cuenta(alias)
     platform = data.get("platform", "facebook").lower()
 
-    # 1. Definición de URLs por plataforma
     urls = {
         "facebook": "https://www.facebook.com/",
         "instagram": "https://www.instagram.com/",
@@ -283,74 +282,72 @@ def manejar_login(context, alias, headless_mode=False):
     }
     target_url = urls.get(platform, "https://www.facebook.com/")
 
-    # 2. CARGA DE COOKIES (Prioridad: Archivo JSON físico -> Base de Datos)
     archivo_json = f"{alias}.json"
     cookies_cargadas = False
 
+    import os
+    import json
     if os.path.exists(archivo_json):
         try:
             with open(archivo_json, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
                 context.add_cookies(cookies)
-                print(f"✅ Sesión cargada desde ARCHIVO JSON para {alias}")
                 cookies_cargadas = True
-        except Exception as e:
-            print(f"⚠️ Error cargando archivo JSON: {e}")
+        except Exception:
+            pass
 
-    # Si no hay JSON o falló, intentamos con la DB
     if not cookies_cargadas:
         cookies_str = data.get("cookies")
         if cookies_str:
             try:
                 cookies = json.loads(cookies_str)
                 context.add_cookies(cookies)
-                print(f"🍪 Cookies inyectadas desde DB para {platform}.")
                 cookies_cargadas = True
-            except Exception as e:
-                print(f"⚠️ Error cookies DB: {e}")
+            except Exception:
+                pass
 
-    # 3. Lanzamiento de página con Stealth
     page = context.new_page()
-    if stealth_sync: 
-        stealth_sync(page)
     
     try:
-        # Navegación con tiempo de espera extendido para evitar ERR_ABORTED
+        from playwright_stealth import stealth_sync
+        stealth_sync(page)
+    except:
+        pass
+    
+    try:
+        # CORRECCIÓN 1: Volvemos a "domcontentloaded" para que espere a que la página arme su estructura visual.
         print(f"🌍 Navegando a {target_url} ...")
-        page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
+        page.goto(target_url, wait_until="domcontentloaded", timeout=60000)
         
-        # Pausa de seguridad para que Facebook procese la sesión
-        page.wait_for_timeout(3000)
+        # CORRECCIÓN 2: Una pausa de 1.5 segundos (en lugar de 3) permite que Facebook renderice el feed.
+        page.wait_for_timeout(1500) 
     except Exception as e:
         print(f"❌ Error de navegación: {e}")
         return None
 
-    # 4. Verificación de Login
     if verificar_si_logueado(page, platform):
         print(f"✅ Login OK en {platform} ({'Archivo' if cookies_cargadas else 'Perfil'}).")
         return page 
     
-    # 5. Si falló la cookie, intentar Login Automático (Solo Facebook)
     print("⚠️ Sesión no detectada. Intentando re-login o pidiendo manual...")
     
     if platform == "facebook":
+        from login_manager import intentar_login_facebook
         return intentar_login_facebook(page, context, alias, data, headless_mode)
-    # Intentos automáticos para plataformas conocidas con credenciales guardadas
     if platform == "instagram":
+        from login_manager import intentar_login_instagram
         inst = intentar_login_instagram(page, context, alias, data, headless_mode)
         if inst:
             return inst
 
-    # Si no se pudo con login automático, y no estamos en headless, permitir login manual breve
     if not headless_mode:
         from tkinter import messagebox
         messagebox.showinfo("Login Requerido", f"La sesión de {platform} para {alias} expiró.\nInicia sesión manualmente en la ventana abierta.")
         try:
-            # Esperar hasta 60 segundos a que el usuario se loguee
             page.wait_for_timeout(60000)
             if verificar_si_logueado(page, platform):
-                # Guardar la nueva sesión exitosa
                 cookies = context.cookies()
+                from login_manager import guardar_cookies_db
                 guardar_cookies_db(alias, cookies)
                 with open(archivo_json, "w", encoding="utf-8") as f:
                     json.dump(cookies, f, indent=4)
@@ -358,6 +355,45 @@ def manejar_login(context, alias, headless_mode=False):
         except: pass
         
     return None
+
+def verificar_si_logueado(page, platform):
+    """
+    Verifica si la sesión está activa detectando elementos clave.
+    """
+    try:
+        # CORRECCIÓN 3: Le damos 5 segundos de tolerancia en lugar de 3. 
+        # Es tiempo suficiente para que cargue, pero no tan lento como los 7 originales.
+        timeout_espera = 5000 
+        
+        if platform == "facebook":
+            return page.locator(
+                'div[role="feed"], '
+                'input[aria-label*="Buscar"], input[aria-label*="Search"], '
+                'div[role="button"] span:has-text("¿Qué estás pensando?"), '
+                'div[role="button"] span:has-text("What\'s on your mind?")'
+            ).first.is_visible(timeout=timeout_espera)
+        
+        elif platform == "tiktok":
+            return page.locator('[data-e2e="profile-icon"], [data-e2e="upload-icon"]').first.is_visible(timeout=timeout_espera)
+        
+        elif platform == "youtube":
+            return page.locator('#avatar-btn, #buttons ytd-topbar-menu-button-renderer, img[alt="Avatar"]').first.is_visible(timeout=timeout_espera)
+            
+        elif platform in ["twitter", "x"]:
+            return page.locator('[data-testid="SideNav_AccountSwitcher_Button"], [data-testid="SideNav_NewTweet_Button"]').first.is_visible(timeout=timeout_espera)
+            
+        elif platform == "instagram":
+            return page.locator(
+                'svg[aria-label="Inicio"], svg[aria-label="Home"], '
+                'svg[aria-label="Perfil"], svg[aria-label="Profile"], '
+                'a[href*="/direct/inbox/"]'
+            ).first.is_visible(timeout=timeout_espera)
+
+        return False
+    except Exception as e:
+        print(f"⚠️ Error en verificación de login ({platform}): {e}")
+        return False
+
 
 
 

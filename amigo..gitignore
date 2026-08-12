@@ -1,15 +1,8 @@
-# Entornos virtuales y caché
+# Ignorar entornos y compilaciones pesadas (NUNCA subir esto)
 env/
 __pycache__/
-
-# Archivos de la base de datos y perfiles (¡CRÍTICO!)
-cuentas.db
-profiles/
-logs/
-*.json
-
-# Archivos compilados
-dist/
 build/
-protegido/
-*.spec
+dist/
+SocialBotFarm.spec
+
+# (Fíjate que ya NO estamos ignorando cuentas.db, ni profiles/, ni logs/, ni los .json)

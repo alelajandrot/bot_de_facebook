@@ -16,114 +16,199 @@ class SocialActions:
     #                               FACEBOOK
     # =========================================================================
     @staticmethod
-    def fb_reaction(alias, url, reaction, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
-        if not url: 
-            logger("⚠️ Error: URL vacía. No se puede iniciar.", "ERROR")
-            return
+    def fb_reaction(alias, url, reaction="Me gusta", headless=False, logger=print, update_preview_cb=None, use_mobile=False, mobile_proxy=None, **kwargs):
+        """
+        Da una reacción a una publicación de Facebook.
+        - Evita irse a los comentarios buscando el atributo aria-pressed en lugar del texto.
+        - Encuentra correctamente la burbuja flotante de reacciones.
+        """
+        from playwright.sync_api import sync_playwright
+        from browser_handler import get_browser_context
+        from login_manager import manejar_login
+        from utils import save_screenshot_log
+        import time
+
+        logger(f"🚀 Iniciando tarea de reacción en Facebook para {alias}...", "INFO")
+
+        with sync_playwright() as p:
+            # 1. Configurar y abrir el navegador
+            context_kwargs = {"headless": headless}
+            if mobile_proxy:
+                context_kwargs["proxy"] = {"server": mobile_proxy}
+                logger(f"🌐 Usando proxy móvil para la reacción...", "INFO")
+                
+            context = get_browser_context(p, alias, log_callback=logger, **context_kwargs)
             
-        with sync_playwright() as p:
+            # 2. Iniciar sesión usando el gestor optimizado
+            page = manejar_login(context, alias, headless)
+            if not page:
+                logger(f"❌ No se pudo iniciar sesión o la sesión expiró para {alias}", "ERROR")
+                context.close()
+                return False
+
+            # 3. Navegar a la publicación
+            logger(f"🌍 Navegando a la publicación: {url}", "INFO")
             try:
-                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-                page = manejar_login(context, alias, headless)
-                if page:
-                    logger(f"Navegando al post: {url[:30]}...", "INFO")
-                    page.goto(url, timeout=60000)
-                    simulate_human_behavior(page)
-                    
-                    # Buscar botón Me gusta
-                    like_btn = page.locator('div[role="button"], span[role="button"]').filter(has_text=re.compile(r"^Me gusta$|^Like$", re.IGNORECASE)).first
-                    if not like_btn.is_visible(): 
-                        like_btn = page.locator('[aria-label="Me gusta"], [aria-label="Like"]').first
-                    
-                    if like_btn.is_visible():
-                        if reaction == "Me gusta":
-                            like_btn.click(force=True)
-                            logger(f"FB: Like simple enviado ({alias})", "SUCCESS")
-                        else:
-                            # Reacciones complejas
-                            logger(f"FB: Desplegando reacciones...", "INFO")
-                            like_btn.hover(force=True)
-                            human_sleep(1.5, 3)
-                            
-                            map_react = {"Me encanta": "Love", "Me divierte": "Haha", "Me asombra": "Wow", "Me entristece": "Sad", "Me enoja": "Angry"}
-                            eng = map_react.get(reaction, reaction)
-                            
-                            btn_react = page.locator(f'[aria-label="{reaction}"], [aria-label="{eng}"]').first
-                            if btn_react.is_visible():
-                                btn_react.click(force=True)
-                                logger(f"FB: Reacción '{reaction}' enviada ({alias})", "SUCCESS")
-                            else:
-                                logger(f"Reacción {reaction} no encontrada, dando Like normal.", "WARN")
-                                like_btn.click(force=True)
-                        
-                        save_screenshot_log(page, alias, "fb_react")
-                        update_preview_cb()
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                time.sleep(3) # Pausa para que Facebook cargue el post completo
+            except Exception as e:
+                logger(f"❌ Error al cargar la publicación: {e}", "ERROR")
+                context.close()
+                return False
+
+            # 4. Lógica PERFECTA para encontrar el botón principal
+            logger(f"👍 Intentando reaccionar con: {reaction}", "INFO")
+            
+            # Buscamos el PRIMER botón interactivo de reacción (ignora el texto, solo busca la estructura). 
+            # Esto evita al 100% que se vaya a los comentarios.
+            boton_principal = page.locator('div[role="button"][aria-pressed]').first
+            
+            if not boton_principal.is_visible(timeout=3000):
+                # Plan B: Si la página es muy antigua o rara, usamos un selector más amplio
+                boton_principal = page.locator('div[role="button"]:has-text("Me gusta"), div[role="button"]:has-text("Like")').first
+
+            # 5. Ejecutar la reacción
+            if boton_principal.is_visible(timeout=5000):
+                estado_like = boton_principal.get_attribute("aria-pressed")
+                
+                if estado_like == "true":
+                    logger("⚠️ La publicación YA tiene una reacción. No se hace nada para no alterarla.", "WARN")
+                else:
+                    if reaction in ["Me gusta", "Like"]:
+                        # Para un simple "Me gusta", un clic directo es suficiente
+                        boton_principal.click(force=True)
+                        logger("✅ 'Me gusta' dado correctamente a la publicación PRINCIPAL.", "SUCCESS")
                     else:
-                        logger(f"FB: Botón 'Me gusta' no encontrado. ¿Post privado?", "ERROR")
-                        save_screenshot_log(page, alias, "error_fb_btn")
-            except Exception as e:
-                logger(f"Error FB React ({alias}): {e}", "ERROR")
-            finally:
-                try: context.close()
-                except: pass
+                        # --- LÓGICA PARA ME ENCANTA, ME DIVIERTE, ME ENOJA ---
+                        logger(f"👀 Desplegando menú de reacciones para dar '{reaction}'...", "INFO")
+                        
+                        boton_principal.scroll_into_view_if_needed()
+                        boton_principal.hover()
+                        page.wait_for_timeout(2500) # Damos 2.5s para que la burbuja suba completamente
+                        
+                        # Buscamos la carita flotante de forma amplia (sin exigir que sea un 'button')
+                        # porque a veces Facebook las pone como imágenes (alt) o divisiones (aria-label)
+                        reaccion_loc = page.locator(f'[aria-label="{reaction}"], [aria-label="{reaction.capitalize()}"], [alt="{reaction}"], [alt="{reaction.capitalize()}"]')
+                        
+                        try:
+                            # Filtramos las visibles y clickeamos la última (que siempre es la flotante)
+                            visibles = reaccion_loc.filter(state="visible")
+                            visibles.last.wait_for(state="visible", timeout=4000)
+                            visibles.last.click(force=True)
+                            logger(f"✅ Reacción '{reaction}' dada correctamente.", "SUCCESS")
+                        except Exception as e:
+                            logger(f"❌ Error: No apareció la carita de '{reaction}' a tiempo o Facebook cambió el diseño.", "ERROR")
+                            # Quitamos el clic de respaldo aquí para evitar que dé "Me gusta" por accidente
+                    
+                    time.sleep(2) # Pausa final para que Facebook guarde el dato en sus servidores
+            else:
+                logger("❌ No se encontró el botón principal en la pantalla (¿Post borrado o formato de video reels?).", "ERROR")
 
+            # 6. Tomar foto de evidencia y cerrar
+            save_screenshot_log(page, alias, f"fb_react_{reaction}")
+            if update_preview_cb: 
+                update_preview_cb()
+                
+            time.sleep(1)
+            context.close()
+            return True
+
+
+    
     @staticmethod
-    def fb_comment(alias, url, comments, headless, logger, update_preview_cb, mobile_proxy=None, **kwargs):
-        if not url: return
-        if isinstance(comments, str): comments = [comments]
-        comments = [c.strip() for c in comments if c.strip()]
+    def fb_reaction(alias, url, reaction="Me gusta", headless=False, logger=print, update_preview_cb=None, use_mobile=False, mobile_proxy=None, **kwargs):
+        from playwright.sync_api import sync_playwright
+        from browser_handler import get_browser_context
+        from login_manager import manejar_login
+        from utils import save_screenshot_log
+        import time
 
-        use_ai = kwargs.get('use_ai', False)
-        ai_model = kwargs.get('ai_model', 'local_fallback')
-        use_vision = kwargs.get('use_vision', False)
+        logger(f"🚀 Iniciando tarea de reacción en Facebook para {alias}...", "INFO")
 
         with sync_playwright() as p:
+            context_kwargs = {"headless": headless}
+            if mobile_proxy:
+                context_kwargs["proxy"] = {"server": mobile_proxy}
+                
+            context = get_browser_context(p, alias, log_callback=logger, **context_kwargs)
+            
+            page = manejar_login(context, alias, headless)
+            if not page:
+                logger(f"❌ No se pudo iniciar sesión para {alias}", "ERROR")
+                context.close()
+                return False
+
+            logger(f"🌍 Navegando a la publicación...", "INFO")
             try:
-                context = get_browser_context(p, alias, headless, logger, mobile_proxy=mobile_proxy)
-                page = manejar_login(context, alias, headless)
-                if page:
-                    page.goto(url, timeout=60000)
-                    simulate_human_behavior(page)
-                    human_sleep(2, 4)
-
-                    # Lógica IA
-                    if (not comments or comments == [""]) and use_ai:
-                        try:
-                            post_text = page.evaluate("""() => {
-                                const sel = document.querySelector('[data-testid="post_message"]') || document.querySelector('article');
-                                return sel ? sel.innerText : document.body.innerText.slice(0,1000);
-                            }""")
-                            generated = generate_comment_from_text(post_text, model=ai_model)
-                            if generated: comments = [generated]
-                        except: pass
-
-                    comentarios_realizados = 0
-                    for i, comment_text in enumerate(comments):
-                        try:
-                            # Intentar abrir caja
-                            btn_comm = page.locator('div[role="button"]').filter(has_text=re.compile(r"Comentar|Comment", re.IGNORECASE)).first
-                            if btn_comm.is_visible(timeout=3000): btn_comm.click(force=True)
-                            
-                            box = page.locator('div[role="textbox"][contenteditable="true"]').first
-                            if box.is_visible(timeout=5000):
-                                box.click(force=True)
-                                page.keyboard.type(comment_text, delay=random.randint(50, 150))
-                                human_sleep(0.5, 1)
-                                page.keyboard.press("Enter")
-                                human_sleep(3, 5) # Espera importante para que se publique
-                                comentarios_realizados += 1
-                                logger(f"FB: Comentario enviado: '{comment_text[:20]}...'", "SUCCESS")
-                        except Exception as e:
-                            logger(f"Error comentando: {e}", "WARN")
-
-                    if comentarios_realizados > 0:
-                        save_screenshot_log(page, alias, "fb_comment")
-                        update_preview_cb()
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                time.sleep(4) # Pausa para que el DOM se construya
             except Exception as e:
-                logger(f"Error FB Comment ({alias}): {e}", "ERROR")
-            finally:
-                try: context.close()
-                except: pass
+                logger(f"❌ Error al cargar la publicación: {e}", "ERROR")
+                context.close()
+                return False
+
+            logger(f"👍 Intentando reaccionar con: {reaction}", "INFO")
+            
+            # --- EL SANTO GRIAL (BASADO EN EL HTML DE COPILOT) ---
+            # Buscamos el botón que tenga el div interno "like_button". ESTO NO EXISTE EN LOS COMENTARIOS.
+            boton_principal = page.locator('div[role="button"]:has(div[data-ad-rendering-role="like_button"])').first
+            
+            # Si Facebook cambió el diseño y no está, usamos la segunda pista: el botón "Reaccionar"
+            if not boton_principal.is_visible(timeout=3000):
+                boton_principal = page.locator('div[role="button"][aria-label="Me gusta"], div[role="button"][aria-label="Like"]').first
+
+            if boton_principal.is_visible(timeout=5000):
+                # Como las ventanas cambian de tamaño, obligamos a la página a centrar el botón
+                boton_principal.scroll_into_view_if_needed()
+                
+                reaccion_actual = boton_principal.get_attribute("aria-label") or ""
+                
+                # Si la etiqueta dice algo distinto a "Me gusta", ya reaccionó
+                if reaccion_actual not in ["Me gusta", "Like", ""]:
+                    logger(f"⚠️ La publicación YA tiene una reacción ('{reaccion_actual}'). No se tocará.", "WARN")
+                else:
+                    if reaction in ["Me gusta", "Like"]:
+                        boton_principal.click(force=True)
+                        logger("✅ 'Me gusta' dado correctamente.", "SUCCESS")
+                    else:
+                        logger(f"👀 Abriendo menú de reacciones para '{reaction}'...", "INFO")
+                        
+                        # Usamos el botón ESPECÍFICO de "Reaccionar" que Copilot descubrió para abrir la burbuja
+                        trigger_burbuja = page.locator('div[aria-label="Reaccionar"][role="button"]').first
+                        if trigger_burbuja.is_visible():
+                            trigger_burbuja.scroll_into_view_if_needed()
+                            trigger_burbuja.hover()
+                        else:
+                            boton_principal.hover()
+                            
+                        page.wait_for_timeout(2500) # Tiempo vital para que la burbuja suba
+                        
+                        # Buscamos la carita en el menú flotante
+                        selector_carita = f'img[alt="{reaction}"], img[alt="{reaction.capitalize()}"], div[aria-label="{reaction}"]'
+                        carita_flotante = page.locator(selector_carita).filter(state="visible").last
+                        
+                        try:
+                            carita_flotante.wait_for(state="visible", timeout=3000)
+                            # Clic forzado saltando animaciones
+                            carita_flotante.click(force=True)
+                            logger(f"✅ Reacción '{reaction}' dada correctamente.", "SUCCESS")
+                        except Exception as e:
+                            logger(f"❌ La carita de '{reaction}' quedó fuera de pantalla o no cargó. Abortando.", "ERROR")
+                    
+                    time.sleep(2) 
+            else:
+                logger("❌ No se encontró el botón principal en la pantalla.", "ERROR")
+
+            save_screenshot_log(page, alias, f"fb_react_{reaction}")
+            if update_preview_cb: 
+                update_preview_cb()
+                
+            time.sleep(1)
+            context.close()
+            return True
+
+
+
 
     # =========================================================================
     #                               INSTAGRAM (CORREGIDO)

@@ -39,7 +39,28 @@ class SocialBotApp(ctk.CTk):
         
         self.is_running = False 
         self.title("Social Bot Farm - PRO v5.2 (Fixed Imports)")
-        self.geometry("1400x950")
+        
+        # --- SOLUCIÓN: Ajuste dinámico al tamaño de la pantalla ---
+        # 1. Obtenemos la resolución de la pantalla actual
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        
+        # 2. Calculamos un tamaño inicial (por ejemplo, 90% del tamaño de la pantalla)
+        width = int(screen_width * 0.9)
+        height = int(screen_height * 0.9)
+        
+        # 3. Asignamos la geometría dinámicamente
+        self.geometry(f"{width}x{height}")
+        
+        # 4. Establecemos un tamaño mínimo para evitar que se deforme si el usuario la achica demasiado
+        self.minsize(900, 700) 
+        
+        # 5. Forzamos a que la ventana se abra maximizada
+        try:
+            self.state('zoomed')
+        except:
+            pass 
+        # -----------------------------------------------------------
         
         # Almacenamiento de referencias a widgets dinámicos
         self.account_selectors = {} 
@@ -57,121 +78,90 @@ class SocialBotApp(ctk.CTk):
     #                       PANEL LATERAL (SIDEBAR)
     # =========================================================================
     def setup_sidebar(self):
-            # Sidebar con gradiente visual (fondo oscuro con toque azul)
-            self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=("#0f172a", "#0f172a"))
-            self.sidebar.grid(row=0, column=0, sticky="nsew")
-            self.sidebar.grid_propagate(False)
-            
-            # --- HEADER ---
-            header_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=15)
-            header_frame.pack(fill="x", padx=12, pady=(15, 10))
-            
-            ctk.CTkLabel(header_frame, text="🤖", font=("Segoe UI", 40)).pack(pady=(12, 5))
-            ctk.CTkLabel(header_frame, text="FARM CONTROL", font=("Segoe UI", 20, "bold"), text_color="#60a5fa").pack()
-            ctk.CTkLabel(header_frame, text="Social Bot Manager Pro", font=("Segoe UI", 10), text_color="#93c5fd").pack(pady=(3, 12))
-            
-            # Separador
-            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
-            
-            # --- CONFIGURACIÓN ---
-            config_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-            config_frame.pack(fill="x", padx=12, pady=5)
-            ctk.CTkLabel(config_frame, text="⚙️ CONFIGURACIÓN", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 8))
-            
-            self.var_headless = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(config_frame, text="👁️ Modo Oculto", variable=self.var_headless,
-                        font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=4)
-            
-            self.var_batch = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(config_frame, text="🔥 Modo Masivo", variable=self.var_batch, 
-                        fg_color="#ef4444", hover_color="#dc2626",
-                        font=("Segoe UI", 10, "bold"), text_color="#fecaca").pack(anchor="w", pady=4)
-            
-            self.var_mobile_mode = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(config_frame, text="📱 Modo Móvil (ADB)", variable=self.var_mobile_mode,
-                        fg_color="#0ea5e9", hover_color="#0284c7",
-                        font=("Segoe UI", 10, "bold"), text_color="#bae6fd",
-                        command=self.on_mobile_mode_toggle).pack(anchor="w", pady=4)
+        # Sidebar con gradiente visual (fondo oscuro con toque azul)
+        self.sidebar = ctk.CTkFrame(self, width=320, corner_radius=0, fg_color=("#0f172a", "#0f172a"))
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
+        
+        # --- HEADER (Comprimido para ganar espacio) ---
+        header_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=12)
+        header_frame.pack(fill="x", padx=12, pady=(10, 5))
+        
+        # Icono y textos más pequeños
+        ctk.CTkLabel(header_frame, text="🤖", font=("Segoe UI", 28)).pack(pady=(5, 0))
+        ctk.CTkLabel(header_frame, text="FARM CONTROL", font=("Segoe UI", 16, "bold"), text_color="#60a5fa").pack()
+        ctk.CTkLabel(header_frame, text="Social Bot Manager Pro", font=("Segoe UI", 9), text_color="#93c5fd").pack(pady=(0, 5))
+        
+        # Separador
+        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=4)
+        
+        # --- CONFIGURACIÓN ---
+        config_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        config_frame.pack(fill="x", padx=12, pady=2)
+        ctk.CTkLabel(config_frame, text="⚙️ CONFIGURACIÓN", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(2, 4))
+        
+        self.var_headless = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(config_frame, text="👁️ Modo Oculto", variable=self.var_headless, font=("Segoe UI", 10)).pack(anchor="w", pady=2)
+        
+        self.var_batch = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(config_frame, text="🔥 Modo Masivo", variable=self.var_batch, fg_color="#ef4444", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=2)
+        
+        self.var_mobile_mode = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(config_frame, text="📱 Modo Móvil (ADB)", variable=self.var_mobile_mode, fg_color="#0ea5e9", font=("Segoe UI", 10, "bold"), command=self.on_mobile_mode_toggle).pack(anchor="w", pady=2)
 
-            self.var_use_ai = ctk.BooleanVar(value=False)
-            ctk.CTkCheckBox(config_frame, text="🧠 Cerebro (IA)", variable=self.var_use_ai,
-                    font=("Segoe UI", 10), text_color="#e0e7ff").pack(anchor="w", pady=4)
+        self.var_use_ai = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(config_frame, text="🧠 Cerebro (IA)", variable=self.var_use_ai, font=("Segoe UI", 10)).pack(anchor="w", pady=2)
 
-            # Separador
-            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
+        # Separador
+        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=4)
 
-            # --- HILOS (WORKERS) ---
-            workers_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=10)
-            workers_frame.pack(fill="x", padx=12, pady=5)
-            
-            ctk.CTkLabel(workers_frame, text="🔀 Hilos Simultáneos", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=12, pady=(8, 4))
-            
-            slider_container = ctk.CTkFrame(workers_frame, fg_color="transparent")
-            slider_container.pack(fill="x", padx=12, pady=(0, 8))
-            
-            self.lbl_workers = ctk.CTkLabel(slider_container, text="1", font=("Segoe UI", 13, "bold"), 
-                                        width=35, fg_color="#0284c7", text_color="white", corner_radius=6)
-            self.lbl_workers.pack(side="right", padx=(8, 0))
-            
-            self.slider_workers = ctk.CTkSlider(slider_container, from_=1, to=10, number_of_steps=9, 
-                                            command=lambda v: self.lbl_workers.configure(text=str(int(v))),
-                                            fg_color="#1e40af", progress_color="#0284c7")
-            self.slider_workers.pack(side="left", fill="x", expand=True)
-            self.slider_workers.set(1)
+        # --- HILOS (WORKERS) ---
+        workers_frame = ctk.CTkFrame(self.sidebar, fg_color=("#1e3a5f", "#1e3a5f"), corner_radius=10)
+        workers_frame.pack(fill="x", padx=12, pady=2)
+        
+        ctk.CTkLabel(workers_frame, text="🔀 Hilos Simultáneos", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=12, pady=(4, 2))
+        
+        slider_container = ctk.CTkFrame(workers_frame, fg_color="transparent")
+        slider_container.pack(fill="x", padx=12, pady=(0, 4))
+        
+        self.lbl_workers = ctk.CTkLabel(slider_container, text="1", font=("Segoe UI", 13, "bold"), width=35, fg_color="#0284c7", corner_radius=6)
+        self.lbl_workers.pack(side="right", padx=(8, 0))
+        
+        self.slider_workers = ctk.CTkSlider(slider_container, from_=1, to=10, number_of_steps=9, command=lambda v: self.lbl_workers.configure(text=str(int(v))), fg_color="#1e40af", progress_color="#0284c7")
+        self.slider_workers.pack(side="left", fill="x", expand=True)
+        self.slider_workers.set(1)
 
-            # Separador
-            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
+        # Separador
+        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=4)
 
-            # --- ACCIONES RÁPIDAS + RED (OPTIMIZADO) ---
-            actions_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
-            actions_frame.pack(fill="x", padx=12, pady=5)
-            ctk.CTkLabel(actions_frame, text="⚡ ACCIONES RÁPIDAS", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(5, 5))
-            
-            # Botones un poco más bajos (height=32) para ahorrar espacio
-            ctk.CTkButton(actions_frame, text="🔄 Refrescar Listas", command=self.on_tab_change, 
-                        border_width=0, fg_color="#1e40af", hover_color="#1e3a8a", text_color="#60a5fa",
-                        font=("Segoe UI", 10, "bold"), height=32, corner_radius=8).pack(fill="x", pady=4)
-            
-            ctk.CTkButton(actions_frame, text="🔑 Login Manual", 
-                        command=lambda: self.run_manual_login(None),
-                        fg_color="#f97316", hover_color="#ea580c", text_color="#ffffff",
-                        font=("Segoe UI", 10, "bold"), height=32, corner_radius=8).pack(fill="x", pady=4)
+        # --- ACCIONES RÁPIDAS + RED ---
+        actions_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        actions_frame.pack(fill="x", padx=12, pady=2)
+        ctk.CTkLabel(actions_frame, text="⚡ ACCIONES RÁPIDAS", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", pady=(2, 2))
+        
+        ctk.CTkButton(actions_frame, text="🔄 Refrescar Listas", command=self.on_tab_change, fg_color="#1e40af", height=28, font=("Segoe UI", 10, "bold"), corner_radius=8).pack(fill="x", pady=2)
+        ctk.CTkButton(actions_frame, text="🔑 Login Manual", command=lambda: self.run_manual_login(None), fg_color="#f97316", height=28, font=("Segoe UI", 10, "bold"), corner_radius=8).pack(fill="x", pady=2)
 
-            # >> AQUÍ ESTÁ EL SWITCH DE ETHERNET INTEGRADO <<
-            eth_container = ctk.CTkFrame(actions_frame, fg_color="#0f172a", corner_radius=6)
-            eth_container.pack(fill="x", pady=(6, 2))
-            
-            self.var_ethernet_status = ctk.BooleanVar(value=True) 
-            
-            self.switch_ethernet = ctk.CTkSwitch(eth_container, text="Ethernet ON",
-                                                variable=self.var_ethernet_status,
-                                                onvalue=True, offvalue=False,
-                                                command=self.toggle_ethernet_adapter,
-                                                font=("Segoe UI", 10, "bold"),
-                                                height=20, switch_width=36, switch_height=18,
-                                                progress_color="#10b981", fg_color="#ef4444")
-            self.switch_ethernet.pack(padx=10, pady=8)
+        # >> SWITCH DE ETHERNET <<
+        eth_container = ctk.CTkFrame(actions_frame, fg_color="#0f172a", corner_radius=6)
+        eth_container.pack(fill="x", pady=(4, 2))
+        
+        self.var_ethernet_status = ctk.BooleanVar(value=True) 
+        self.switch_ethernet = ctk.CTkSwitch(eth_container, text="Ethernet ON", variable=self.var_ethernet_status, command=self.toggle_ethernet_adapter, font=("Segoe UI", 10, "bold"), height=18, switch_width=36, switch_height=18, progress_color="#10b981", fg_color="#ef4444")
+        self.switch_ethernet.pack(padx=10, pady=6)
 
-            # Separador final
-            ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=8)
+        # Separador final
+        ctk.CTkFrame(self.sidebar, height=1, fg_color="#1e40af").pack(fill="x", padx=15, pady=4)
 
-            # --- VISTA PREVIA (TAMAÑO REDUCIDO) ---
-# --- VISTA PREVIA (TAMAÑO FIJO PARA EVITAR COLAPSO) ---
-            preview_frame = ctk.CTkFrame(self.sidebar, fg_color="#1e3a5f", corner_radius=12)
-            # Quitamos el side="bottom" para que se apile naturalmente y no se esconda
-            preview_frame.pack(fill="x", padx=12, pady=15) 
-            
-            preview_header = ctk.CTkLabel(preview_frame, text="📸 Última Actividad", 
-                                        font=("Segoe UI", 11, "bold"), text_color="#60a5fa")
-            preview_header.pack(anchor="w", padx=12, pady=(8, 4))
-            
-            # Forzamos un tamaño fijo con height_request o empacado expansivo
-            self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Esperando captura...]", 
-                                            fg_color="#0f172a", corner_radius=10,
-                                            font=("Segoe UI", 9), text_color="#9ca3af",
-                                            width=260, height=100) # Tamaño fijo
-            # Añadimos expand=True para que defienda su espacio
-            self.lbl_screenshot.pack(padx=12, pady=(0, 12), fill="both", expand=True)
+        # --- VISTA PREVIA ---
+        preview_frame = ctk.CTkFrame(self.sidebar, fg_color="#1e3a5f", corner_radius=12)
+        preview_frame.pack(fill="x", padx=12, pady=5) 
+        
+        preview_header = ctk.CTkLabel(preview_frame, text="📸 Última Actividad", font=("Segoe UI", 11, "bold"), text_color="#60a5fa")
+        preview_header.pack(anchor="w", padx=12, pady=(4, 2))
+        
+        self.lbl_screenshot = ctk.CTkLabel(preview_frame, text="[Esperando captura...]", fg_color="#0f172a", corner_radius=10, width=260, height=90)
+        self.lbl_screenshot.pack(padx=12, pady=(0, 8), fill="both", expand=True)
 
 
     # =========================================================================
@@ -221,35 +211,36 @@ class SocialBotApp(ctk.CTk):
         except Exception:
             pass
 
+
     def build_platform_ui(self, tab, platform_key):
         """Construye la interfaz genérica para cada red social"""
         tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(0, weight=1) # ESTA LÍNEA ES LA MAGIA PARA EL SCROLL
         
-        # 1. HEADER: Selector de Cuentas con mejor diseño
-        header_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        header_frame.pack(fill="x", padx=15, pady=(15, 10))
+        scroll_container = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll_container.grid(row=0, column=0, sticky="nsew") # Fuerza los bordes
+        scroll_container.grid_columnconfigure(0, weight=1)
+        
+        # 1. HEADER: Selector de Cuentas
+        header_frame = ctk.CTkFrame(scroll_container, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        header_frame.pack(fill="x", padx=15, pady=(10, 10))
         header_frame.grid_columnconfigure(1, weight=1)
         
         ctk.CTkLabel(header_frame, text="👤 Cuenta:", font=("Segoe UI", 12, "bold"), 
-                     text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=12, sticky="w")
+                     text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=8, sticky="w")
         
-        # Cargar lista inicial
         cuentas = obtener_cuentas_por_plataforma(platform_key)
         selector = ctk.CTkComboBox(header_frame, values=cuentas, width=300, 
                                   font=("Segoe UI", 11), dropdown_font=("Segoe UI", 11),
                                   fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                  button_color="#1e40af", button_hover_color="#0284c7",
-                                  text_color="#e5e7eb")
-        selector.grid(row=0, column=1, padx=15, pady=12, sticky="ew")
-        
-        # Guardar referencia para acceder luego
+                                  button_color="#1e40af", button_hover_color="#0284c7", text_color="#e5e7eb")
+        selector.grid(row=0, column=1, padx=15, pady=8, sticky="ew")
         self.account_selectors[platform_key] = selector
 
         # 2. BODY: Controles específicos
-        body_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        body_frame.pack(fill="both", expand=True, padx=15, pady=10)
+        body_frame = ctk.CTkFrame(scroll_container, fg_color="transparent")
+        body_frame.pack(fill="both", expand=True, padx=15, pady=5)
 
-        # Llamar a la función constructora específica
         if platform_key == "facebook": self.ui_facebook(body_frame)
         elif platform_key == "instagram": self.ui_instagram(body_frame)
         elif platform_key == "tiktok": self.ui_tiktok(body_frame)
@@ -319,128 +310,72 @@ class SocialBotApp(ctk.CTk):
     
     def ui_facebook(self, parent):
         parent.grid_columnconfigure((0, 1, 2), weight=1)
-        parent.grid_rowconfigure(1, weight=1)
         
-        # URL Section
         url_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        url_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=10, pady=(0, 15))
+        url_frame.grid(row=0, column=0, columnspan=3, sticky="ew", padx=5, pady=(0, 10))
         url_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(url_frame, text="🔗 URL del Post", font=("Segoe UI", 13, "bold"), 
-                     text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=(12, 5), sticky="w")
-        self.fb_url = ctk.CTkEntry(url_frame, placeholder_text="https://facebook.com/...", 
-                                   font=("Segoe UI", 11), height=35, 
-                                   fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                   text_color="#e5e7eb", placeholder_text_color="#6b7280")
-        self.fb_url.grid(row=1, column=0, padx=15, pady=(0, 12), sticky="ew")
+        ctk.CTkLabel(url_frame, text="🔗 URL del Post", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=(8, 2), sticky="w")
+        self.fb_url = ctk.CTkEntry(url_frame, placeholder_text="https://facebook.com/...", font=("Segoe UI", 11), height=30, fg_color="#0f172a", border_color="#1e40af", border_width=1)
+        self.fb_url.grid(row=1, column=0, padx=15, pady=(0, 10), sticky="ew")
 
-        # Reacciones Card
+        # PANEL REACCIONES (Más pequeño)
         react_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        react_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-        react_frame.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(react_frame, text="👍 Reacciones", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 10))
-        ctk.CTkLabel(react_frame, text="Tipo de reacción:", font=("Segoe UI", 10), text_color="#9ca3af").pack(pady=(0, 5))
-        self.fb_react_combo = ctk.CTkComboBox(react_frame, values=["Me gusta", "Me encanta", "Me divierte", "Me asombra"],
-                                             font=("Segoe UI", 11), width=200, height=35,
-                                             fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                             button_color="#1e40af", button_hover_color="#0284c7",
-                                             text_color="#e5e7eb")
-        self.fb_react_combo.pack(pady=5)
+        react_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        ctk.CTkLabel(react_frame, text="👍 Reacciones", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(pady=(10, 5))
+        self.fb_react_combo = ctk.CTkComboBox(react_frame, values=["Me gusta", "Me encanta", "Me divierte", "Me asombra"], font=("Segoe UI", 11), height=30, fg_color="#0f172a", border_color="#1e40af", border_width=1)
+        self.fb_react_combo.pack(pady=5, padx=15, fill="x")
         self.fb_react_combo.set("Me gusta")
-        
-        ctk.CTkButton(react_frame, text="👍 Reaccionar", fg_color="#1877F2", hover_color="#0d47a1",
-                     font=("Segoe UI", 12, "bold"), height=40, corner_radius=8,
-                     command=lambda: self.start_execution("fb_react", "facebook")).pack(pady=(15, 15), padx=15, fill="x")
+        ctk.CTkButton(react_frame, text="👍 Reaccionar", fg_color="#1877F2", hover_color="#0d47a1", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("fb_react", "facebook")).pack(pady=(10, 10), padx=15, fill="x")
 
-        # Comentarios Card
+        # PANEL COMENTARIOS (Caja más corta)
         comment_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        comment_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=5)
-        comment_frame.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(comment_frame, text="💬 Comentarios", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
-        ctk.CTkLabel(comment_frame, text="Cada línea = 1 comentario", font=("Segoe UI", 9), text_color="#9ca3af").pack(pady=(0, 10))
-        
-        self.fb_comment_txt = ctk.CTkTextbox(comment_frame, width=250, height=150, 
-                                            font=("Segoe UI", 11), corner_radius=8,
-                                            fg_color="#0f172a", border_width=1, border_color="#1e40af",
-                                            text_color="#e5e7eb")
+        comment_frame.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+        ctk.CTkLabel(comment_frame, text="💬 Comentarios", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(pady=(10, 5))
+        self.fb_comment_txt = ctk.CTkTextbox(comment_frame, height=70, font=("Segoe UI", 11), fg_color="#0f172a", border_width=1, border_color="#1e40af")
         self.fb_comment_txt.pack(pady=5, padx=15, fill="both", expand=True)
-        self.fb_comment_txt.insert("1.0", "Escribe comentarios...\nCada línea es un comentario diferente")
-        
-        ctk.CTkButton(comment_frame, text="💬 Comentar", fg_color="#1877F2", hover_color="#0d47a1",
-                     font=("Segoe UI", 12, "bold"), height=40, corner_radius=8,
-                     command=lambda: self.start_execution("fb_comment", "facebook")).pack(pady=(10, 15), padx=15, fill="x")
+        self.fb_comment_txt.insert("1.0", "Cada línea = 1 comentario")
+        ctk.CTkButton(comment_frame, text="💬 Comentar", fg_color="#1877F2", hover_color="#0d47a1", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("fb_comment", "facebook")).pack(pady=(5, 10), padx=15, fill="x")
     
+        # PANEL MULTIMEDIA
         multi_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        multi_frame.grid(row=1, column=2, sticky="nsew", padx=10, pady=5) # Columna 2, Fila 1
-        
-        ctk.CTkLabel(multi_frame, text="📸 Multimedia", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
-        
-        # Campo para la ruta de la imagen
+        multi_frame.grid(row=1, column=2, sticky="nsew", padx=5, pady=5)
+        ctk.CTkLabel(multi_frame, text="📸 Multimedia", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(pady=(10, 5))
         path_container = ctk.CTkFrame(multi_frame, fg_color="transparent")
         path_container.pack(fill="x", padx=15, pady=5)
-        
-        self.fb_img_path_entry = ctk.CTkEntry(path_container, placeholder_text="Ruta de imagen...", 
-                                            font=("Segoe UI", 10), height=30, fg_color="#0f172a")
+        self.fb_img_path_entry = ctk.CTkEntry(path_container, placeholder_text="Ruta de imagen...", font=("Segoe UI", 10), height=30, fg_color="#0f172a")
         self.fb_img_path_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        
-        ctk.CTkButton(path_container, text="📁", width=30, height=30, fg_color="#475569", 
-                    command=self.browse_fb_image).pack(side="right")
+        ctk.CTkButton(path_container, text="📁", width=30, height=30, fg_color="#475569", command=self.browse_fb_image).pack(side="right")
+        ctk.CTkButton(multi_frame, text="📝 Publicar Foto", fg_color="#059669", hover_color="#047857", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("fb_post_img", "facebook")).pack(pady=(5, 5), padx=15, fill="x")
+        ctk.CTkButton(multi_frame, text="👤 Cambiar Perfil", fg_color="#7c3aed", hover_color="#6d28d9", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("fb_update_avatar", "facebook")).pack(pady=(5, 10), padx=15, fill="x")
 
-        # Botón: Publicar con Imagen
-        ctk.CTkButton(multi_frame, text="📝 Publicar Foto", fg_color="#059669", hover_color="#047857",
-                    font=("Segoe UI", 11, "bold"), height=35, corner_radius=8,
-                    command=lambda: self.start_execution("fb_post_img", "facebook")).pack(pady=(10, 5), padx=15, fill="x")
-
-        # Botón: Cambiar Foto de Perfil
-        ctk.CTkButton(multi_frame, text="👤 Cambiar Perfil", fg_color="#7c3aed", hover_color="#6d28d9",
-                    font=("Segoe UI", 11, "bold"), height=35, corner_radius=8,
-                    command=lambda: self.start_execution("fb_update_avatar", "facebook")).pack(pady=(5, 15), padx=15, fill="x")     
 
     def ui_instagram(self, parent):
         parent.grid_columnconfigure((0, 1), weight=1)
-        parent.grid_rowconfigure(1, weight=1)
         
-        # URL Section
         url_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        url_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=10, pady=(0, 15))
+        url_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 10))
         url_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(url_frame, text="🔗 URL del Post", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=(12, 5), sticky="w")
-        self.ig_url = ctk.CTkEntry(url_frame, placeholder_text="https://instagram.com/p/...", 
-                                   font=("Segoe UI", 11), height=35,
-                                   fg_color="#230f2a", border_color="#1e40af", border_width=1,
-                                   text_color="#e5e7eb", placeholder_text_color="#6b7280")
-        self.ig_url.grid(row=1, column=0, padx=15, pady=(0, 12), sticky="ew")
+        ctk.CTkLabel(url_frame, text="🔗 URL del Post", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").grid(row=0, column=0, padx=15, pady=(8, 2), sticky="w")
+        self.ig_url = ctk.CTkEntry(url_frame, placeholder_text="https://instagram.com/p/...", font=("Segoe UI", 11), height=30, fg_color="#230f2a", border_color="#1e40af", border_width=1)
+        self.ig_url.grid(row=1, column=0, padx=15, pady=(0, 10), sticky="ew")
         
-        # Like Card
+        # PANEL LIKE
         like_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        like_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+        like_frame.grid(row=1, column=0, sticky="nsew", padx=5, pady=5)
+        ctk.CTkLabel(like_frame, text="❤️ Like", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(pady=(15, 10))
+        ctk.CTkButton(like_frame, text="❤️ DAR LIKE", fg_color="#C13584", hover_color="#a02860", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("ig_like", "instagram")).pack(pady=(10, 15), padx=20, fill="x")
         
-        ctk.CTkLabel(like_frame, text="❤️ Like", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 10))
-        ctk.CTkButton(like_frame, text="❤️ DAR LIKE", fg_color="#C13584", hover_color="#a02860",
-                     font=("Segoe UI", 12, "bold"), height=50, corner_radius=8,
-                     command=lambda: self.start_execution("ig_like", "instagram")).pack(pady=(20, 15), padx=20, fill="x")
-        
-        # Comentarios Card
+        # PANEL COMENTARIOS
         comment_frame = ctk.CTkFrame(parent, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        comment_frame.grid(row=1, column=1, sticky="nsew", padx=10, pady=5)
-        comment_frame.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(comment_frame, text="💬 Comentarios", font=("Segoe UI", 13, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
-        ctk.CTkLabel(comment_frame, text="Cada línea = 1 comentario", font=("Segoe UI", 9), text_color="#9ca3af").pack(pady=(0, 10))
-        
-        self.ig_comment_txt = ctk.CTkTextbox(comment_frame, width=250, height=150, 
-                                            font=("Segoe UI", 11), corner_radius=8,
-                                            fg_color="#0f172a", border_width=1, border_color="#1e40af",
-                                            text_color="#e5e7eb")
+        comment_frame.grid(row=1, column=1, sticky="nsew", padx=5, pady=5)
+        ctk.CTkLabel(comment_frame, text="💬 Comentarios", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(pady=(10, 5))
+        self.ig_comment_txt = ctk.CTkTextbox(comment_frame, height=70, font=("Segoe UI", 11), fg_color="#0f172a", border_width=1, border_color="#1e40af")
         self.ig_comment_txt.pack(pady=5, padx=15, fill="both", expand=True)
-        self.ig_comment_txt.insert("1.0", "Escribe comentarios...\nCada línea es un comentario diferente")
-        
-        ctk.CTkButton(comment_frame, text="💬 COMENTAR", fg_color="#C13584", hover_color="#a02860",
-                     font=("Segoe UI", 12, "bold"), height=40, corner_radius=8,
-                     command=lambda: self.start_execution("ig_comment", "instagram")).pack(pady=(10, 15), padx=15, fill="x")
+        self.ig_comment_txt.insert("1.0", "Cada línea = 1 comentario")
+        ctk.CTkButton(comment_frame, text="💬 COMENTAR", fg_color="#C13584", hover_color="#a02860", font=("Segoe UI", 11, "bold"), height=35, corner_radius=8, command=lambda: self.start_execution("ig_comment", "instagram")).pack(pady=(5, 10), padx=15, fill="x")
+
 
     def ui_tiktok(self, parent):
         parent.grid_columnconfigure((0, 1), weight=1)
@@ -595,9 +530,13 @@ class SocialBotApp(ctk.CTk):
     def setup_warmup_ui(self):
         f = self.tab_warmup
         f.grid_columnconfigure(0, weight=1)
+
+        scroll_container = ctk.CTkScrollableFrame(f, fg_color="transparent")
+        scroll_container.pack(fill="both", expand=True)
+        scroll_container.grid_columnconfigure(0, weight=1)
         
         # Header
-        header_frame = ctk.CTkFrame(f, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        header_frame = ctk.CTkFrame(scroll_container, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
         header_frame.pack(fill="x", padx=20, pady=(20, 15))
         header_frame.grid_columnconfigure(0, weight=1)
         
@@ -606,7 +545,7 @@ class SocialBotApp(ctk.CTk):
                     font=("Segoe UI", 10), text_color="#9ca3af").pack(pady=(0, 15))
         
         # Configuración Card
-        config_card = ctk.CTkFrame(f, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        config_card = ctk.CTkFrame(scroll_container, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
         config_card.pack(fill="x", padx=20, pady=10)
         config_card.grid_columnconfigure(0, weight=1)
         
@@ -1105,23 +1044,24 @@ class SocialBotApp(ctk.CTk):
     #                       UTILIDADES DE INTERFAZ
     # =========================================================================
     def setup_console(self):
-        self.log_frame = ctk.CTkFrame(self, height=180, corner_radius=12, fg_color="#1e3a5f")
-        self.log_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=15, pady=(0, 15))
-        self.log_frame.grid_propagate(False)
-        self.log_frame.grid_columnconfigure(0, weight=1)
-        
-        # Header de consola con acento premium
-        console_header = ctk.CTkFrame(self.log_frame, fg_color="transparent")
-        console_header.pack(fill="x", padx=15, pady=(12, 8))
-        ctk.CTkLabel(console_header, text="📋 Consola de Actividad", 
-                     font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(side="left")
-        
-        # Textbox con fondo oscuro y acento azul
-        self.console = ctk.CTkTextbox(self.log_frame, height=140, font=("Consolas", 10), 
-                                      corner_radius=8, fg_color="#0f172a",
-                                      text_color="#e5e7eb", border_width=1, border_color="#1e40af")
-        self.console.pack(fill="both", expand=True, padx=15, pady=(0, 12))
-        self.console.configure(state="disabled")
+            # 1. Reducimos el height del contenedor principal de 180 a 90
+            self.log_frame = ctk.CTkFrame(self, height=90, corner_radius=12, fg_color="#1e3a5f")
+            self.log_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=15, pady=(0, 15))
+            self.log_frame.grid_propagate(False) # Obliga a mantener la altura de 90
+            self.log_frame.grid_columnconfigure(0, weight=1)
+            
+            # Header de consola (reducimos los márgenes pady)
+            console_header = ctk.CTkFrame(self.log_frame, fg_color="transparent")
+            console_header.pack(fill="x", padx=15, pady=(8, 4))
+            ctk.CTkLabel(console_header, text="📋 Consola de Actividad", 
+                        font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(side="left")
+            
+            # 2. Reducimos el height del Textbox de 140 a 50 (suficiente para ~3 líneas)
+            self.console = ctk.CTkTextbox(self.log_frame, height=50, font=("Consolas", 10), 
+                                        corner_radius=8, fg_color="#0f172a",
+                                        text_color="#e5e7eb", border_width=1, border_color="#1e40af")
+            self.console.pack(fill="both", expand=True, padx=15, pady=(0, 8))
+            self.console.configure(state="disabled")
 
     def log(self, msg, type="INFO"):
         ts = time.strftime("%H:%M:%S")
@@ -1180,73 +1120,56 @@ class SocialBotApp(ctk.CTk):
 
     # --- UI ESTADO DE CUENTAS ---
     def setup_status_ui(self):
-        """Muestra el estado de todas las cuentas (con/sin cookies)"""
         tab = self.tab_status
         tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(2, weight=1) # Deja que el frame de la tabla tome todo el espacio sobrante
         
-        # Header
+        # 1. Header (Arriba de todo)
         header_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        header_frame.pack(fill="x", padx=20, pady=(20, 15))
-        header_frame.grid_columnconfigure(0, weight=1)
+        header_frame.grid(row=0, column=0, sticky="ew", padx=15, pady=(15, 10))
+        ctk.CTkLabel(header_frame, text="📊 ESTADO DE CUENTAS", font=("Segoe UI", 16, "bold"), text_color="#ffffff").pack(pady=(10, 2))
+        ctk.CTkLabel(header_frame, text="Visualiza qué cuentas tienen cookies cargadas", font=("Segoe UI", 10), text_color="#9ca3af").pack(pady=(0, 10))
         
-        ctk.CTkLabel(header_frame, text="📊 ESTADO DE CUENTAS", font=("Segoe UI", 18, "bold"), text_color="#050505").pack(pady=(15, 5))
-        ctk.CTkLabel(header_frame, text="Visualiza qué cuentas tienen cookies cargadas", 
-                    font=("Segoe UI", 10), text_color="#9ca3af").pack(pady=(0, 15))
+        # 2. Filtros Y Botones de Acción (Todo visible arriba)
+        control_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        control_frame.grid(row=1, column=0, sticky="ew", padx=15, pady=(0, 10))
+        control_frame.grid_columnconfigure(1, weight=1)
         
-        # Frame de filtros
-        filter_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        filter_frame.pack(fill="x", padx=20, pady=(0, 15))
-        filter_frame.grid_columnconfigure(1, weight=1)
+        # Fila Superior del control_frame: Filtros
+        filter_row = ctk.CTkFrame(control_frame, fg_color="transparent")
+        filter_row.pack(fill="x", padx=10, pady=(10, 5))
         
-        # Filtro por nombre
-        ctk.CTkLabel(filter_frame, text="🔍 Filtrar:", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").grid(row=0, column=0, padx=(15, 10), pady=12)
-        self.filter_nombre = ctk.CTkEntry(filter_frame, placeholder_text="Por nombre...", height=35,
-                                          fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                          text_color="#e5e7eb")
-        self.filter_nombre.grid(row=0, column=1, padx=(0, 10), pady=12, sticky="ew")
+        ctk.CTkLabel(filter_row, text="🔍 Buscar:", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(side="left", padx=5)
+        self.filter_nombre = ctk.CTkEntry(filter_row, placeholder_text="Nombre...", height=30, width=150, fg_color="#0f172a", border_color="#1e40af")
+        self.filter_nombre.pack(side="left", padx=5)
         self.filter_nombre.bind("<KeyRelease>", lambda e: self.refresh_status_ui())
         
-        # Filtro por red social
-        ctk.CTkLabel(filter_frame, text="Plataforma:", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").grid(row=0, column=2, padx=(0, 10), pady=12)
-        self.filter_platform = ctk.CTkComboBox(filter_frame, values=["Todas", "facebook", "instagram", "tiktok", "youtube", "twitter"], 
-                                               height=35, fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                               button_color="#1e40af", button_hover_color="#0284c7", text_color="#e5e7eb",
-                                               command=self.refresh_status_ui)
-        self.filter_platform.grid(row=0, column=3, padx=(0, 10), pady=12, sticky="ew")
+        ctk.CTkLabel(filter_row, text="Red:", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(side="left", padx=5)
+        self.filter_platform = ctk.CTkComboBox(filter_row, values=["Todas", "facebook", "instagram", "tiktok", "youtube", "twitter"], height=30, width=120, fg_color="#0f172a", border_color="#1e40af", command=self.refresh_status_ui)
+        self.filter_platform.pack(side="left", padx=5)
         self.filter_platform.set("Todas")
         
-        # Botón para limpiar filtros
-        ctk.CTkButton(filter_frame, text="✨ Limpiar", fg_color="#1e40af", hover_color="#0284c7",
-                     corner_radius=8, height=35, font=("Segoe UI", 10, "bold"),
-                     command=self.limpiar_filtros).grid(row=0, column=4, padx=(0, 15), pady=12)
+        ctk.CTkButton(filter_row, text="✨ Limpiar", fg_color="#1e40af", height=30, font=("Segoe UI", 10, "bold"), command=self.limpiar_filtros).pack(side="left", padx=5)
         
-        # Frame para tabla de cuentas
+        # Fila Inferior del control_frame: Botones (¡RESCATADOS!)
+        btn_row = ctk.CTkFrame(control_frame, fg_color="transparent")
+        btn_row.pack(fill="x", padx=10, pady=(5, 10))
+        
+        ctk.CTkButton(btn_row, text="🔄 Refrescar Estado", fg_color="#0284c7", height=35, font=("Segoe UI", 11, "bold"), command=self.refresh_status_ui).pack(side="left", fill="x", expand=True, padx=5)
+        ctk.CTkButton(btn_row, text="💾 Sincronizar BD", fg_color="#10b981", height=35, font=("Segoe UI", 11, "bold"), command=self.sincronizar_bd).pack(side="left", fill="x", expand=True, padx=5)
+        
+        # 3. La Tabla (Abajo, puede ser del tamaño que quiera, tiene su propio scroll)
         table_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        table_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        table_frame.grid(row=2, column=0, sticky="nsew", padx=15, pady=(0, 15))
         table_frame.grid_columnconfigure(0, weight=1)
+        table_frame.grid_rowconfigure(0, weight=1)
         
-        # Frame scrollable para las cuentas
-        scroll_frame = ctk.CTkScrollableFrame(table_frame, fg_color="transparent")
-        scroll_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        scroll_frame.grid_columnconfigure(0, weight=1)
+        self.status_frame = ctk.CTkScrollableFrame(table_frame, fg_color="transparent")
+        self.status_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.status_frame.grid_columnconfigure(0, weight=1)
         
-        self.status_frame = scroll_frame
-        
-        # Botón para refrescar
-        btn_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(0, 20))
-        btn_frame.grid_columnconfigure((0, 1), weight=1)
-        
-        ctk.CTkButton(btn_frame, text="🔄 Refrescar Estado", fg_color="#0284c7", 
-                     hover_color="#1e40af", height=40, font=("Segoe UI", 12, "bold"), corner_radius=8,
-                     command=self.refresh_status_ui).grid(row=0, column=0, sticky="ew", padx=(0, 8))
-        
-        ctk.CTkButton(btn_frame, text="💾 Sincronizar BD", fg_color="#10b981", 
-                     hover_color="#059669", height=40, font=("Segoe UI", 12, "bold"), corner_radius=8,
-                     command=self.sincronizar_bd).grid(row=0, column=1, sticky="ew")
-        
-        # Cargar estado inicial
         self.refresh_status_ui()
+
 
     def limpiar_filtros(self):
         """Limpia los filtros y recarga la tabla"""
@@ -1414,81 +1337,62 @@ class SocialBotApp(ctk.CTk):
     def setup_accounts_ui(self):
         tab = self.tab_accounts
         tab.grid_columnconfigure(0, weight=1)
+        tab.grid_rowconfigure(0, weight=1) # CRÍTICO PARA EL SCROLL
         
-        # Header
-        header_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        header_frame.pack(fill="x", padx=20, pady=(20, 15))
-        ctk.CTkLabel(header_frame, text="➕ Agregar Nueva Cuenta", font=("Segoe UI", 14, "bold"), text_color="#60a5fa").pack(pady=(12, 0))
+        scroll = ctk.CTkScrollableFrame(tab, fg_color="transparent")
+        scroll.grid(row=0, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
         
-        # Form Frame
-        form_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        form_frame.pack(fill="x", padx=20, pady=10)
+        header_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        header_frame.pack(fill="x", padx=15, pady=(15, 10))
+        ctk.CTkLabel(header_frame, text="➕ Agregar Nueva Cuenta", font=("Segoe UI", 14, "bold"), text_color="#60a5fa").pack(pady=10)
+        
+        form_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        form_frame.pack(fill="x", padx=15, pady=5)
         form_frame.grid_columnconfigure(0, weight=1)
         
-        ctk.CTkLabel(form_frame, text="Alias (único)", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(15, 5))
-        self.entry_new_alias = ctk.CTkEntry(form_frame, placeholder_text="ej: fb_usuario1", height=35,
-                                            fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                            text_color="#e5e7eb")
-        self.entry_new_alias.pack(fill="x", padx=15, pady=(0, 10))
+        ctk.CTkLabel(form_frame, text="Alias (único)", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(10, 2))
+        self.entry_new_alias = ctk.CTkEntry(form_frame, placeholder_text="ej: fb_usuario1", height=30, fg_color="#0f172a", border_color="#1e40af")
+        self.entry_new_alias.pack(fill="x", padx=15, pady=(0, 5))
         
-        ctk.CTkLabel(form_frame, text="Plataforma", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 5))
-        self.combo_platform = ctk.CTkComboBox(form_frame, values=["facebook", "instagram", "tiktok", "youtube", "twitter"],
-                                              height=35, fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                              button_color="#1e40af", button_hover_color="#0284c7", text_color="#e5e7eb")
-        self.combo_platform.pack(fill="x", padx=15, pady=(0, 10))
+        ctk.CTkLabel(form_frame, text="Plataforma", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 2))
+        self.combo_platform = ctk.CTkComboBox(form_frame, values=["facebook", "instagram", "tiktok", "youtube", "twitter"], height=30, fg_color="#0f172a", border_color="#1e40af")
+        self.combo_platform.pack(fill="x", padx=15, pady=(0, 5))
         
-        ctk.CTkLabel(form_frame, text="Usuario / Email", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 5))
-        self.entry_new_user = ctk.CTkEntry(form_frame, placeholder_text="usuario@email.com", height=35,
-                                           fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                           text_color="#e5e7eb")
-        self.entry_new_user.pack(fill="x", padx=15, pady=(0, 10))
+        ctk.CTkLabel(form_frame, text="Usuario / Email", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 2))
+        self.entry_new_user = ctk.CTkEntry(form_frame, placeholder_text="usuario@email.com", height=30, fg_color="#0f172a", border_color="#1e40af")
+        self.entry_new_user.pack(fill="x", padx=15, pady=(0, 5))
         
-        ctk.CTkLabel(form_frame, text="Contraseña", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 5))
-        self.entry_new_pass = ctk.CTkEntry(form_frame, placeholder_text="••••••••", show="*", height=35,
-                                           fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                           text_color="#e5e7eb")
-        self.entry_new_pass.pack(fill="x", padx=15, pady=(0, 10))
+        ctk.CTkLabel(form_frame, text="Contraseña", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 2))
+        self.entry_new_pass = ctk.CTkEntry(form_frame, placeholder_text="••••••••", show="*", height=30, fg_color="#0f172a", border_color="#1e40af")
+        self.entry_new_pass.pack(fill="x", padx=15, pady=(0, 5))
         
-        ctk.CTkLabel(form_frame, text="Proxy (opcional)", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 5))
-        self.entry_new_proxy = ctk.CTkEntry(form_frame, placeholder_text="http://user:pass@ip:port", height=35,
-                                            fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                            text_color="#e5e7eb")
-        self.entry_new_proxy.pack(fill="x", padx=15, pady=(0, 15))
-        # --- NUEVO: Selector de Método de Creación ---
+        ctk.CTkLabel(form_frame, text="Proxy (opcional)", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(0, 2))
+        self.entry_new_proxy = ctk.CTkEntry(form_frame, placeholder_text="http://user:pass@ip:port", height=30, fg_color="#0f172a", border_color="#1e40af")
+        self.entry_new_proxy.pack(fill="x", padx=15, pady=(0, 5))
+        
         method_frame = ctk.CTkFrame(form_frame, fg_color="transparent")
-        method_frame.pack(fill="x", padx=15, pady=(0, 10))
-        
-        ctk.CTkLabel(method_frame, text="Método de Creación:", font=("Segoe UI", 11, "bold"), text_color="#60a5fa").pack(side="left", padx=(0, 10))
-        
+        method_frame.pack(fill="x", padx=15, pady=(5, 5))
+        ctk.CTkLabel(method_frame, text="Método:", font=("Segoe UI", 10, "bold"), text_color="#60a5fa").pack(side="left", padx=(0, 10))
         self.var_creation_method = ctk.StringVar(value="pc_web")
-        ctk.CTkRadioButton(method_frame, text="💻 PC (Navegador)", variable=self.var_creation_method, value="pc_web", font=("Segoe UI", 11)).pack(side="left", padx=10)
-        ctk.CTkRadioButton(method_frame, text="📱 Celular Físico (Seguro)", variable=self.var_creation_method, value="mobile_app", font=("Segoe UI", 11)).pack(side="left", padx=10)
-        # ---------------------------------------------
+        ctk.CTkRadioButton(method_frame, text="💻 PC", variable=self.var_creation_method, value="pc_web", font=("Segoe UI", 10)).pack(side="left", padx=5)
+        ctk.CTkRadioButton(method_frame, text="📱 Celular", variable=self.var_creation_method, value="mobile_app", font=("Segoe UI", 10)).pack(side="left", padx=5)
 
-        # Buttons
         btn_row = ctk.CTkFrame(form_frame, fg_color="transparent")
-        btn_row.pack(fill="x", padx=15, pady=(0, 15))
+        btn_row.pack(fill="x", padx=15, pady=(10, 15))
         btn_row.grid_columnconfigure((0, 1, 2), weight=1)
 
-        ctk.CTkButton(btn_row, text="💾 Guardar", command=self.save_account, 
-                     fg_color="#10b981", hover_color="#059669", corner_radius=8, height=40, font=("Segoe UI", 11, "bold")).grid(row=0, column=0, padx=3)
-        ctk.CTkButton(btn_row, text="✏️ Editar", command=self.edit_account_dialog, 
-                     fg_color="#0284c7", hover_color="#1e40af", corner_radius=8, height=40, font=("Segoe UI", 11, "bold")).grid(row=0, column=1, padx=3)
-        ctk.CTkButton(btn_row, text="🗑️ Eliminar", command=self.delete_account_dialog, 
-                     fg_color="#ef4444", hover_color="#dc2626", corner_radius=8, height=40, font=("Segoe UI", 11, "bold")).grid(row=0, column=2, padx=3)
+        ctk.CTkButton(btn_row, text="💾 Guardar", command=self.save_account, fg_color="#10b981", height=35, font=("Segoe UI", 11, "bold")).grid(row=0, column=0, padx=3, sticky="ew")
+        ctk.CTkButton(btn_row, text="✏️ Editar", command=self.edit_account_dialog, fg_color="#0284c7", height=35, font=("Segoe UI", 11, "bold")).grid(row=0, column=1, padx=3, sticky="ew")
+        ctk.CTkButton(btn_row, text="🗑️ Eliminar", command=self.delete_account_dialog, fg_color="#ef4444", height=35, font=("Segoe UI", 11, "bold")).grid(row=0, column=2, padx=3, sticky="ew")
         
-        # Import Section
-        import_frame = ctk.CTkFrame(tab, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
-        import_frame.pack(fill="x", padx=20, pady=10)
-        import_frame.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(import_frame, text="📥 Importar Perfil Local", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(15, 8))
-        self.combo_import = ctk.CTkComboBox(import_frame, values=self.get_profiles_list(), height=35,
-                                            fg_color="#0f172a", border_color="#1e40af", border_width=1,
-                                            button_color="#1e40af", button_hover_color="#0284c7", text_color="#e5e7eb")
+        import_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        import_frame.pack(fill="x", padx=15, pady=5)
+        ctk.CTkLabel(import_frame, text="📥 Importar Perfil Local", font=("Segoe UI", 12, "bold"), text_color="#60a5fa").pack(anchor="w", padx=15, pady=(10, 5))
+        self.combo_import = ctk.CTkComboBox(import_frame, values=self.get_profiles_list(), height=30, fg_color="#0f172a", border_color="#1e40af")
         self.combo_import.pack(fill="x", padx=15, pady=(0, 10))
-        ctk.CTkButton(import_frame, text="📥 Vincular Carpeta", command=self.import_local_profile, 
-                     fg_color="#0284c7", hover_color="#1e40af", corner_radius=8, height=40, font=("Segoe UI", 11, "bold")).pack(fill="x", padx=15, pady=(0, 15))
+        ctk.CTkButton(import_frame, text="📥 Vincular Carpeta", command=self.import_local_profile, fg_color="#0284c7", height=35, font=("Segoe UI", 11, "bold")).pack(fill="x", padx=15, pady=(0, 15))
+
 
     # =========================================================================
     #                       UI CREADOR MÓVIL
@@ -1499,9 +1403,12 @@ class SocialBotApp(ctk.CTk):
     def setup_mobile_creator_ui(self):
         f = self.tab_mobile_creator
         f.grid_columnconfigure(0, weight=1)
+        scroll_container = ctk.CTkScrollableFrame(f, fg_color="transparent")
+        scroll_container.pack(fill="both", expand=True)
+        scroll_container.grid_columnconfigure(0, weight=1)
 
         # Card Principal
-        card = ctk.CTkFrame(f, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
+        card = ctk.CTkFrame(scroll_container, corner_radius=12, fg_color="#1e3a5f", border_width=1, border_color="#1e40af")
         card.pack(fill="both", expand=True, padx=20, pady=20)
 
         ctk.CTkLabel(card, text="📱 CREADOR MÓVIL (1 SIM a la vez)", font=("Segoe UI", 20, "bold"), text_color="#60a5fa").pack(pady=(30, 10))
@@ -1636,72 +1543,77 @@ class SocialBotApp(ctk.CTk):
             self.is_running = False
             self.btn_start_mob.configure(state="normal", text="🔥 ROTAR IP Y CREAR CUENTA")
 
+
     def save_account(self):
-        # 1. Capturamos todos los datos de los campos
-        alias = self.entry_new_alias.get()
+        alias = self.entry_new_alias.get().strip()
         network = self.combo_platform.get()
-        user = self.entry_new_user.get()
+        user = self.entry_new_user.get().strip()
         pwd = self.entry_new_pass.get()
         proxy = self.entry_new_proxy.get()
         
-        # 2. Capturamos qué método eligió el usuario (con un fallback de seguridad)
         try:
             metodo = self.var_creation_method.get()
         except AttributeError:
-            metodo = "pc_web" # Por si aún no has pegado el código de los RadioButtons en la UI
+            metodo = "pc_web" 
 
-        if alias:
-            # 3. Lógica del Celular (Se activará más tarde)
-            if metodo == "mobile_app":
-                print(f"🚀 [PRÓXIMAMENTE] Iniciando creación segura en celular para {alias}...")
-                # Aquí conectaremos a smart_mobile.py en la tarde
+        if not alias:
+            messagebox.showwarning("Faltan datos", "El campo Alias es obligatorio.")
+            return
+
+        # -------------------------------------------------------------
+        # ✅ NUEVA LÓGICA: Si es móvil, delegamos todo al bot del celular
+        # -------------------------------------------------------------
+        if metodo == "mobile_app":
+            self.log(f"🚀 Iniciando creación segura en celular para {alias}...", "INFO")
+            messagebox.showinfo(
+                "Proceso Iniciado", 
+                f"Mira tu celular o la consola.\n\nEl bot automatizará la creación en '{network.capitalize()}' y SOLO se guardará en la base de datos si la cuenta se crea con éxito."
+            )
             
-            # 4. Guardamos la cuenta en la base de datos de SQLite
+            # Limpiamos los campos visualmente
+            self.entry_new_alias.delete(0, 'end')
+            self.entry_new_user.delete(0, 'end')
+            self.entry_new_pass.delete(0, 'end')
+            self.entry_new_proxy.delete(0, 'end')
+
+            # Ejecutamos el bot móvil en un hilo separado para que no se congele el PC
+            import threading
+            threading.Thread(target=self.run_mobile_creation_flow, args=(alias, network, user, pwd, proxy), daemon=True).start()
+            
+        # -------------------------------------------------------------
+        # LÓGICA ORIGINAL: Si es PC Web, guarda de inmediato
+        # -------------------------------------------------------------
+        else:
+            from login_manager import guardar_nueva_cuenta
             if guardar_nueva_cuenta(alias, user, pwd, proxy, network):
                 
-                # ¡NUEVO! Guardamos la cuenta en el Excel
                 try:
+                    from utils import exportar_cuenta_excel
                     exportar_cuenta_excel(alias, network, user, pwd, status=f"Guardada ({metodo})")
-                except NameError:
-                    print("⚠️ Aviso: No se exportó a Excel porque falta importar la función arriba en main.py")
+                except Exception:
+                    pass
 
-                # Refrescar listas visuales
                 try:
                     self.refresh_all_account_selectors()
                 except Exception:
                     pass
                 self.on_tab_change()
                 
-                # Limpiar formulario
                 self.entry_new_alias.delete(0, 'end')
                 self.entry_new_user.delete(0, 'end')
                 self.entry_new_pass.delete(0, 'end')
                 self.entry_new_proxy.delete(0, 'end')
 
-                # --- LÓGICA DE AVISO Y LOGIN INMEDIATO ---
-                if metodo == "pc_web":
-                    # Tu lógica original para cuando creas en PC
-                    respuesta = messagebox.askyesno(
-                        "Cuenta Guardada", 
-                        f"La cuenta '{alias}' se guardó y exportó a Excel correctamente.\n\n"
-                        "¿Deseas INICIAR SESIÓN MANUALMENTE ahora para guardar las cookies?"
-                    )
-                    
-                    if respuesta:
-                        # Lanzamos la ventana de asistencia de login
-                        self.run_manual_login(alias)
-                else:
-                    # Aviso simple para cuando elegiste Celular Físico
-                    messagebox.showinfo(
-                        "Cuenta Guardada", 
-                        f"La cuenta '{alias}' se guardó y exportó a Excel correctamente.\n\n"
-                        "Método seleccionado: 📱 Celular Físico."
-                    )
+                respuesta = messagebox.askyesno(
+                    "Cuenta Guardada", 
+                    f"La cuenta '{alias}' se guardó y exportó a Excel correctamente.\n\n"
+                    "¿Deseas INICIAR SESIÓN MANUALMENTE ahora para guardar las cookies?"
+                )
+                
+                if respuesta:
+                    self.run_manual_login(alias)
             else:
                 messagebox.showerror("Error", "No se pudo guardar (Posible Alias duplicado).")
-        else:
-            messagebox.showwarning("Faltan datos", "El campo Alias es obligatorio.")
-
 
     
     def get_profiles_list(self):
@@ -1937,143 +1849,108 @@ class SocialBotApp(ctk.CTk):
             pass
 
     # --- IMPLEMENTACIÓN DE LOGIN MANUAL ---
+
     def run_manual_login(self, alias=None):
-            # 1. Obtener el alias si no viene por parámetro
-            if not alias:
-                try:
-                    tab = self.tabs.get()
-                    key_map = {k: v for k, v in self.plataformas.items()}
-                    if tab in key_map:
-                        plat = key_map[tab]
-                        alias = self.account_selectors[plat].get()
-                except: pass
-            
-            if not alias or alias == "Sin cuentas":
-                messagebox.showwarning("Aviso", "Selecciona una cuenta de la lista primero.")
+        if not alias:
+            try:
+                tab = self.tabs.get()
+                key_map = {k: v for k, v in self.plataformas.items()}
+                if tab in key_map:
+                    plat = key_map[tab]
+                    alias = self.account_selectors[plat].get()
+            except: pass
+        
+        if not alias or alias == "Sin cuentas":
+            messagebox.showwarning("Aviso", "Selecciona una cuenta de la lista primero.")
+            return
+
+        from login_manager import obtener_datos_cuenta
+        data = obtener_datos_cuenta(alias)
+        if not data:
+            messagebox.showerror("Error", "No se encontraron datos de la cuenta.")
+            return
+
+        helper = ctk.CTkToplevel(self)
+        helper.title(f"Login: {alias}")
+        helper.geometry("350x480")
+        helper.attributes("-topmost", True) 
+        helper.resizable(False, False)
+
+        frame = ctk.CTkFrame(helper, corner_radius=10)
+        frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        ctk.CTkLabel(frame, text=f"🔐 ASISTENTE DE LOGIN", font=("Segoe UI", 16, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
+        ctk.CTkLabel(frame, text=f"Cuenta: {alias}", font=("Segoe UI", 12)).pack(pady=(0, 10))
+        
+        # --- ASISTENTE DE LOGIN (SECCIÓN CREDENCIALES UNIFICADA) ---
+        def copy_to_clipboard(text):
+            val = str(text) if text is not None else ""
+            if not val:
+                messagebox.showwarning("Aviso", "No hay texto disponible para copiar.", parent=helper)
                 return
+            self.clipboard_clear()
+            self.clipboard_append(val)
+            self.update()
+            messagebox.showinfo("Copiado", "Texto copiado al portapapeles.", parent=helper)
 
-            # 2. Obtener datos de la cuenta
-            data = obtener_datos_cuenta(alias)
-            if not data:
-                messagebox.showerror("Error", "No se encontraron datos de la cuenta.")
-                return
+        # Campo Usuario / Email
+        ctk.CTkLabel(frame, text="Usuario / Email:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
+        user_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        user_frame.pack(fill="x", padx=20, pady=(0, 10))
+        
+        ent_user = ctk.CTkEntry(user_frame, width=220)
+        ent_user.pack(side="left", padx=(0, 5))
+        
+        user_text = str(data.get("username") or "")
+        ent_user.insert(0, user_text)
+        
+        ctk.CTkButton(user_frame, text="📋", width=30, fg_color="#475569", 
+                    command=lambda: copy_to_clipboard(user_text)).pack(side="left")
 
-            # 3. Crear VENTANA FLOTANTE DE ASISTENCIA (Helper)
-            helper = ctk.CTkToplevel(self)
-            helper.title(f"Login: {alias}")
-            helper.geometry("350x450")
-            helper.attributes("-topmost", True) # Mantener siempre visible encima del navegador
-            helper.resizable(False, False)
+        # Campo Contraseña
+        ctk.CTkLabel(frame, text="Contraseña:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
+        pass_frame = ctk.CTkFrame(frame, fg_color="transparent")
+        pass_frame.pack(fill="x", padx=20, pady=(0, 15))
+        
+        ent_pass = ctk.CTkEntry(pass_frame, width=220) 
+        ent_pass.pack(side="left", padx=(0, 5))
+        
+        pass_text = str(data.get("password") or "")
+        ent_pass.insert(0, pass_text)
+        
+        ctk.CTkButton(pass_frame, text="📋", width=30, fg_color="#475569", 
+                    command=lambda: copy_to_clipboard(pass_text)).pack(side="left")
 
-            # Contenedor principal
-            frame = ctk.CTkFrame(helper, corner_radius=10)
-            frame.pack(fill="both", expand=True, padx=10, pady=10)
+        instrucciones = (
+            "1. El navegador se abrirá automáticamente.\n"
+            "2. Copia y pega los datos de arriba.\n"
+            "3. Inicia sesión y asegúrate de entrar al Home.\n"
+            "4. Presiona 'GUARDAR SESIÓN' abajo."
+        )
+        ctk.CTkLabel(frame, text=instrucciones, justify="left", font=("Segoe UI", 10), text_color="#9ca3af").pack(padx=20, pady=10)
 
-            ctk.CTkLabel(frame, text=f"🔐 ASISTENTE DE LOGIN", font=("Segoe UI", 16, "bold"), text_color="#60a5fa").pack(pady=(15, 5))
-            ctk.CTkLabel(frame, text=f"Cuenta: {alias}", font=("Segoe UI", 12)).pack(pady=(0, 10))
-            
-            # --- Función para copiar al portapapeles ---
-            def copy_to_clipboard(text):
-                self.clipboard_clear()
-                self.clipboard_append(text)
-                self.update() # Necesario para que el portapapeles se actualice
-                messagebox.showinfo("Copiado", "Texto copiado al portapapeles", parent=helper)
+        # --- CONTROL DE NAVEGADOR Y COOKIES ---
+        browser_state = {"running": True, "should_save": False}
 
-            # Mostrar Usuario
-            ctk.CTkLabel(frame, text="Usuario / Email:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
-            user_frame = ctk.CTkFrame(frame, fg_color="transparent")
-            user_frame.pack(fill="x", padx=20, pady=(0, 10))
-            
-            ent_user = ctk.CTkEntry(user_frame, width=220)
-            ent_user.pack(side="left", padx=(0, 5))
-            ent_user.insert(0, data.get("username", ""))
-            
-            ctk.CTkButton(user_frame, text="📋", width=30, fg_color="#475569", 
-                        command=lambda: copy_to_clipboard(data.get("username", ""))).pack(side="left")
+        def request_save_and_close():
+            browser_state["should_save"] = True
+            btn_save.configure(state="disabled", text="⏳ Guardando cookies...")
 
-            # Mostrar Contraseña
-            ctk.CTkLabel(frame, text="Contraseña:", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=20)
-            pass_frame = ctk.CTkFrame(frame, fg_color="transparent")
-            pass_frame.pack(fill="x", padx=20, pady=(0, 15))
-            
-            ent_pass = ctk.CTkEntry(pass_frame, width=220) # No ponemos show="*" para que puedas verla si quieres
-            ent_pass.pack(side="left", padx=(0, 5))
-            ent_pass.insert(0, data.get("password", ""))
-            
-            ctk.CTkButton(pass_frame, text="📋", width=30, fg_color="#475569", 
-                        command=lambda: copy_to_clipboard(data.get("password", ""))).pack(side="left")
+        btn_save = ctk.CTkButton(frame, text="💾 GUARDAR SESIÓN Y SALIR", command=request_save_and_close,
+                                fg_color="#10b981", hover_color="#059669", height=45, font=("Segoe UI", 12, "bold"))
+        btn_save.pack(fill="x", padx=20, pady=(10, 20))
 
-            # Instrucciones
-            instrucciones = (
-                "1. El navegador se abrirá automáticamente.\n"
-                "2. Copia y pega los datos de arriba.\n"
-                "3. Inicia sesión y asegúrate de entrar al Home.\n"
-                "4. Presiona 'GUARDAR SESIÓN' abajo."
-            )
-            ctk.CTkLabel(frame, text=instrucciones, justify="left", font=("Segoe UI", 10), text_color="#9ca3af").pack(padx=20, pady=10)
-
-            # Variables para controlar el hilo del navegador
-            browser_state = {"context": None, "page": None, "playwright": None, "running": True}
-
-            # --- Función para guardar y cerrar ---
-            def save_and_close():
-                if browser_state["context"]:
-                    try:
-                        # Capturar cookies
-                        cookies = browser_state["context"].cookies()
-                        
-                        # Guardar en DB
-                        from login_manager import guardar_cookies_db
-                        guardar_cookies_db(alias, cookies, strict=False, platform_hint=data.get("platform"))
-                        
-                        # Guardar en JSON (Respaldo local)
-                        import json
-                        with open(f"{alias}.json", "w", encoding="utf-8") as f:
-                            json.dump(cookies, f, indent=4)
-                        
-                        messagebox.showinfo("Éxito", "✅ Cookies guardadas y perfil actualizado.", parent=helper)
-                        self.log(f"✅ Login Manual COMPLETADO para: {alias}", "SUCCESS")
-                    except Exception as e:
-                        self.log(f"Error guardando cookies: {e}", "ERROR")
-                        messagebox.showerror("Error", f"No se pudieron guardar las cookies: {e}", parent=helper)
-                    
-                    # Cerrar navegador
-                    try:
-                        browser_state["context"].close()
-                        browser_state["playwright"].stop()
-                    except: pass
-                    
-                    browser_state["running"] = False
-                    helper.destroy()
-                    
-                    # Actualizar estado UI
-                    if hasattr(self, 'refresh_status_ui'):
-                        self.refresh_status_ui()
-                else:
-                    messagebox.showwarning("Espera", "El navegador aún no está listo.", parent=helper)
-
-            # Botón de Guardar
-            btn_save = ctk.CTkButton(frame, text="💾 GUARDAR SESIÓN Y SALIR", command=save_and_close,
-                                    fg_color="#10b981", hover_color="#059669", height=45, font=("Segoe UI", 12, "bold"))
-            btn_save.pack(fill="x", padx=20, pady=(10, 20))
-
-            # --- Hilo del Navegador ---
-            def _browser_thread():
-                self.log(f"🔵 Abriendo navegador para: {alias}...", "INFO")
-                try:
-                    from playwright.sync_api import sync_playwright
-                    from browser_handler import get_browser_context
-                    
-                    p = sync_playwright().start()
-                    browser_state["playwright"] = p
-                    
-                    # IMPORTANTE: headless=False para que puedas ver la ventana
+        def _browser_thread():
+            self.log(f"🔵 Abriendo navegador para: {alias}...", "INFO")
+            try:
+                from playwright.sync_api import sync_playwright
+                from browser_handler import get_browser_context
+                import json
+                
+                with sync_playwright() as p:
                     context = get_browser_context(p, alias, headless=False, log_callback=self.log)
-                    browser_state["context"] = context
-                    
                     page = context.new_page()
                     
-                    # Navegar a la plataforma
                     urls = {
                         "facebook": "https://www.facebook.com/",
                         "instagram": "https://www.instagram.com/",
@@ -2084,38 +1961,49 @@ class SocialBotApp(ctk.CTk):
                     plat = data.get("platform", "facebook").lower()
                     url = urls.get(plat, "https://www.facebook.com/")
                     
-                    try:
-                        page.goto(url)
+                    try: page.goto(url)
                     except: pass
 
-                    # Bucle infinito para mantener el navegador abierto hasta que el usuario guarde
                     while browser_state["running"]:
-                        time.sleep(1)
-                        # Verificar si el navegador se cerró manualmente
-                        try:
-                            if page.is_closed():
-                                break
-                        except:
-                            break
-                    
-                    # Limpieza si se cierra el bucle
-                    if browser_state["running"]:
-                        context.close()
-                        p.stop()
+                        time.sleep(0.5)
                         
-                except Exception as e:
-                    self.log(f"❌ Error en navegador manual: {e}", "ERROR")
+                        try:
+                            if page.is_closed(): break
+                        except: break
+                            
+                        if browser_state["should_save"]:
+                            self.log("💾 Guardando cookies de forma segura...", "INFO")
+                            try:
+                                cookies = context.cookies()
+                                from login_manager import guardar_cookies_db
+                                guardar_cookies_db(alias, cookies, strict=False, platform_hint=data.get("platform"))
+                                
+                                with open(f"{alias}.json", "w", encoding="utf-8") as f:
+                                    json.dump(cookies, f, indent=4)
+                                
+                                self.log(f"✅ Login Manual COMPLETADO para: {alias}", "SUCCESS")
+                                self.after(0, lambda: messagebox.showinfo("Éxito", "✅ Cookies guardadas y perfil actualizado.", parent=helper))
+                            except Exception as e:
+                                self.log(f"Error guardando cookies: {e}", "ERROR")
+                                self.after(0, lambda e=e: messagebox.showerror("Error", f"No se pudieron guardar: {e}", parent=helper))
+                            break
+                            
+            except Exception as e:
+                self.log(f"❌ Error en navegador manual: {e}", "ERROR")
+            finally:
+                browser_state["running"] = False
+                self.after(0, helper.destroy)
+                if hasattr(self, 'refresh_status_ui'):
+                    self.after(0, self.refresh_status_ui)
 
-            # Iniciar el hilo del navegador
-            threading.Thread(target=_browser_thread, daemon=True).start()
+        import threading
+        threading.Thread(target=_browser_thread, daemon=True).start()
 
-            # Protocolo al cerrar la ventana flotante (helper)
-            def on_helper_close():
-                if messagebox.askyesno("Cerrar", "¿Seguro que quieres cerrar sin guardar las cookies?", parent=helper):
-                    browser_state["running"] = False
-                    helper.destroy()
-            
-            helper.protocol("WM_DELETE_WINDOW", on_helper_close)
+        def on_helper_close():
+            if messagebox.askyesno("Cerrar", "¿Seguro que quieres cerrar sin guardar las cookies?", parent=helper):
+                browser_state["running"] = False
+        
+        helper.protocol("WM_DELETE_WINDOW", on_helper_close)
 
 
     def run_mobile_creation_flow(self, alias, network, user, pwd, proxy):
@@ -2127,32 +2015,44 @@ class SocialBotApp(ctk.CTk):
         try:
             bot_movil = SmartMobileRescue() 
             
+            # Formatear el nombre por si el usuario usó un alias tipo "juan_perez"
+            partes = alias.split('_')
+            nombre = partes[0].capitalize() if partes else alias
+            apellido = partes[1].capitalize() if len(partes) > 1 else "Bot"
+
             datos = {
-                "nombre": alias.split('_')[0], 
-                "apellido": "Bot", 
-                "telefono": user, # Tu número celular
+                "nombre": nombre, 
+                "apellido": apellido, 
+                "telefono": user, 
                 "password": pwd,
-                "genero": "Hombre" # O aleatorio: random.choice(["Hombre", "Mujer"])
+                "genero": "Hombre"
             }
             
-            # Ejecuta la rutina del celular
+            # Ejecuta la rutina del celular (Debug físico)
             exito = bot_movil.automatizar_formulario_creacion(network, datos)
             
+            # SOLO GUARDA SI FUE EXITOSO
             if exito:
                 self.log("✅ Flujo móvil terminado. Guardando en Base de Datos...", "SUCCESS")
                 
-                # ¡AQUÍ ESTÁ LA MAGIA DEL SQL! 
-                # Llama a tu función de login_manager.py que hace el INSERT en SQLite
+                # Guarda en SQLite
                 if guardar_nueva_cuenta(alias, user, pwd, proxy, network):
                     self.log(f"💾 ¡Cuenta {alias} guardada en SQLite exitosamente!", "SUCCESS")
                     
-                    # Refrescar la UI para que aparezca en el panel de inmediato
+                    # Guarda en Excel
+                    try:
+                        from utils import exportar_cuenta_excel
+                        exportar_cuenta_excel(alias, network, user, pwd, status="Creada (Gestor Móvil)")
+                    except Exception as e:
+                        self.log(f"⚠️ Aviso Excel: {e}", "WARN")
+
+                    # Refresca las listas de cuentas en la interfaz
                     self.after(500, self.refresh_all_account_selectors)
                     self.after(500, self.refresh_status_ui)
                 else:
                     self.log(f"⚠️ La cuenta se creó en el móvil, pero hubo un error guardándola en la DB (¿Alias duplicado?)", "WARN")
             else:
-                self.log("❌ El flujo móvil falló o se interrumpió.", "ERROR")
+                self.log("❌ El flujo móvil falló o se interrumpió. La cuenta NO se guardó en la DB.", "ERROR")
                 
         except Exception as e:
             self.log(f"❌ Error crítico en flujo móvil: {e}", "ERROR")
